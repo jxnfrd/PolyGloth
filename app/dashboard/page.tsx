@@ -17,8 +17,8 @@ export default async function Dashboard() {
                                 <div className="flex items-center justify-between gap-x-4 mb-4">
                                     <div className="flex items-center gap-2">
                                         <div className={`h-3 w-3 rounded-full ${signal.indicator_color === 'green' ? 'bg-green-500 animate-pulse' :
-                                                signal.indicator_color === 'orange' ? 'bg-orange-500' :
-                                                    'bg-red-500'
+                                            signal.indicator_color === 'orange' ? 'bg-orange-500' :
+                                                'bg-red-500'
                                             }`} title={`Freshness Score: ${signal.freshness_score || 'N/A'}`} />
 
                                         <div className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${signal.tier === 1 ? 'bg-indigo-400/10 text-indigo-400 ring-indigo-400/20' :
@@ -54,15 +54,18 @@ export default async function Dashboard() {
                                 </p>
 
                                 <div className="mt-4 flex flex-wrap gap-2">
-                                    <span className="inline-flex items-center rounded-full bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
-                                        {signal.evidence_type?.replace('_', ' ') || 'Analysis'}
+                                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ring-1 ring-inset ${signal.evidence_type === 'OFFICIAL_DOCUMENT'
+                                            ? 'bg-purple-400/10 text-purple-400 ring-purple-400/20'
+                                            : 'bg-blue-400/10 text-blue-400 ring-blue-400/20'
+                                        }`}>
+                                        {signal.evidence_type === 'OFFICIAL_DOCUMENT' ? '🏛️ OFFICIAL GOV' : '📰 NEWS MEDIA'}
                                     </span>
                                     <span className="inline-flex items-center rounded-full bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
                                         Score: {signal.contradiction_score}/100
                                     </span>
                                     {signal.freshness_score > 0 && (
                                         <span className="inline-flex items-center rounded-full bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
-                                            Freshness: {signal.freshness_score}
+                                            Freshness: {signal.freshness_score} ({signal.indicator_color})
                                         </span>
                                     )}
                                 </div>
