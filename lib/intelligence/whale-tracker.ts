@@ -1,13 +1,5 @@
 import * as cheerio from 'cheerio';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase
-// Note: In Next.js, process.env is populated automatically.
-// In standalone scripts, ensure dotenv is loaded BEFORE importing this class.
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 interface TraderData {
     username: string; // Polymarket ID/Handle
@@ -25,6 +17,17 @@ interface OpenPosition {
 
 export class WhaleTracker {
     private BASE_URL = 'https://polymarket.com';
+    private supabase: SupabaseClient;
+
+    constructor() {
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+            console.warn('⚠️ WhaleTracker: NEXT_PUBLIC_SUPABASE_URL not found. DB ops will fail.');
+        }
+        this.supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+    }
 
     // Helper: Sleep to respect rate limits
     private delay(ms: number) {
@@ -170,7 +173,7 @@ export class WhaleTracker {
 
     // 3. Database Ops
     private async upsertTrader(trader: TraderData): Promise<string | null> {
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('tracked_traders')
             .upsert({
                 polymarket_user_id: trader.username,
@@ -196,7 +199,7 @@ export class WhaleTracker {
             else if (rank <= 20 || pos.size > 500) strength = 'medium';
 
             // Ensure we save even small positions for visibility (MVP)
-            const { error } = await supabase
+            const { error } = await this.supabase
                 .from('whale_signals')
                 .upsert({
                     trader_id: traderId,

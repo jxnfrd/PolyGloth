@@ -15,8 +15,8 @@ async function runWhaleScan() {
 
     const tracker = new WhaleTracker();
 
-    // Scan top 10 traders
-    await tracker.updateTopTraders(10);
+    // Local Manual Scan: Check 5 traders from top 20
+    await tracker.updateTopTraders(5, 20);
 
     console.log('🏁 Whale Scan Finished.');
 }

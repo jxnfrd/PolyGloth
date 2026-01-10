@@ -10,10 +10,10 @@ export async function GET(request: Request) {
         const tracker = new WhaleTracker();
 
         // TIMEOUT FIX:
-        // Scan only 2 traders randomly selected from the Top 20.
+        // Scan only 4 traders randomly selected from the Top 20.
         // This keeps execution under 10 seconds (Serverless Limit).
         // Cron should run more frequently (e.g., every 15-30 mins) to compensate.
-        await tracker.updateTopTraders(2, 20);
+        await tracker.updateTopTraders(4, 20);
 
         return NextResponse.json({ success: true, message: 'Whale scan complete' });
     } catch (error: any) {
