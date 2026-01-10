@@ -63,7 +63,7 @@ export default function AdminMarketsTable() {
                                     </td>
                                     <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                         <a
-                                            href={`https://polymarket.com/event/${market.slug}`}
+                                            href={market.slug ? `https://polymarket.com/event/${market.slug}` : `https://polymarket.com/market/${market.id}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1"

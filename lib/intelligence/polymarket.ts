@@ -31,18 +31,26 @@ export async function fetchActiveMarkets(limit: number = 50): Promise<Market[]> 
 
         if (response.data && Array.isArray(response.data)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return response.data.map((m: any) => ({
-                id: m.id,
-                slug: m.slug || m.question.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-                question: m.question,
-                description: m.description || '',
-                outcomes: JSON.stringify(m.outcomes),
-                outcomePrices: JSON.stringify(m.outcomePrices),
-                volume: m.volume,
-                liquidity: m.liquidity,
-                startDate: m.startDate,
-                endDate: m.endDate
-            }));
+            return response.data.map((m: any) => {
+                // Try to find the Event Slug (most "real" link)
+                // Use the first event's slug if available, otherwise market slug
+                const eventSlug = m.events?.[0]?.slug;
+                const bestSlug = eventSlug || m.slug;
+
+                return {
+                    id: m.id,
+                    // If no slug found, pass ID which can be used for /market/[id] fallback
+                    slug: bestSlug || null,
+                    question: m.question,
+                    description: m.description || '',
+                    outcomes: JSON.stringify(m.outcomes),
+                    outcomePrices: JSON.stringify(m.outcomePrices),
+                    volume: m.volume,
+                    liquidity: m.liquidity,
+                    startDate: m.startDate,
+                    endDate: m.endDate
+                };
+            });
         }
 
         return [];
