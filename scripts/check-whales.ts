@@ -14,12 +14,11 @@ async function check() {
     console.log(`📶 Whale Signals: ${signals}`);
 
     if (signals === 0) {
-        console.log('⚠️ No signals found. Scraper might be failing to parse positions.');
+        console.log('⚠️ No signals found.');
     } else {
-        console.log('✅ Signals exist in DB. Issue might be visibility/filtering.');
-        // Show sample
-        const { data } = await supabase.from('whale_signals').select('*').limit(1);
-        console.log('Sample:', data);
+        console.log('✅ Signals in DB:');
+        const { data } = await supabase.from('whale_signals').select('market_question, position_size_usd, discovered_at, trader_action').order('discovered_at', { ascending: false }).limit(20);
+        console.table(data);
     }
 }
 

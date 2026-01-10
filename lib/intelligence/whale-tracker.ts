@@ -185,9 +185,10 @@ export class WhaleTracker {
             .single();
 
         if (error) {
-            console.error('   DB Upsert Error:', error.message);
+            console.error('   ❌ DB Upsert TRADER Error:', error.message);
             return null;
         }
+        // console.log(`   ✅ Trader upserted: ${data.id}`);
         return data.id;
     }
 
@@ -214,8 +215,9 @@ export class WhaleTracker {
                 }, { onConflict: 'market_id,trader_id' });
 
             if (error) {
-                // Ignore duplicate key errors if they come up, or log warn
-                // console.warn('Signal save error:', error.message);
+                console.error(`   ❌ DB Upsert SIGNAL Error for ${pos.marketSlug}:`, error.message);
+            } else {
+                console.log(`   ✅ Signal Saved: ${pos.marketQuestion.substring(0, 30)}...`);
             }
         }
     }
