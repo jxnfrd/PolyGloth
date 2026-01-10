@@ -85,9 +85,9 @@ export async function fetchByTheme(theme: string, countryCode: string): Promise<
 
 /**
  * 3. Fetch Gov Leaks / Official Docs
- * Restricts to high-authority domains
+ * Restricts to high-authority domains AND specific keywords
  */
-export async function fetchGovDocs(countryCode: string): Promise<GdeltAdvancedArticle[]> {
+export async function fetchGovDocs(keywords: string[], countryCode: string): Promise<GdeltAdvancedArticle[]> {
     const domains: Record<string, string> = {
         'br': 'gov.br',
         'us': 'gov OR house.gov OR senate.gov',
@@ -98,7 +98,11 @@ export async function fetchGovDocs(countryCode: string): Promise<GdeltAdvancedAr
     const domainPart = domains[countryCode] ? `domain:${domains[countryCode]}` : `domain:gov.${countryCode}`;
     const domainQuery = countryCode === 'us' ? `(domain:gov OR domain:house.gov OR domain:senate.gov)` : domainPart;
 
-    const query = `${domainQuery} (regulation OR law OR bill OR decree)`;
+    // Use keywords to ensure relevance
+    const keywordString = keywords.map(k => `"${k}"`).join(' OR ');
+
+    // Only look for "official" type documents if possible, or just use the domain authority + keywords
+    const query = `${domainQuery} (${keywordString})`;
     return queryGDELT(query, 'artlist', '48h');
 }
 
@@ -112,7 +116,7 @@ export async function detectSignalSpikes(marketTitle: string, marketKeywords: st
     // Parallel detection
     const [negative, gov] = await Promise.all([
         fetchNegativeSignals(marketKeywords, countryCode),
-        fetchGovDocs(countryCode) // Broad gov check, could refine with keywords
+        fetchGovDocs(marketKeywords, countryCode) // Now passing keywords!
     ]);
 
     return { negative, gov };
