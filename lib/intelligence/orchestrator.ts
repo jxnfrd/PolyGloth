@@ -110,7 +110,8 @@ export async function runScan(): Promise<ScanResult> {
             }
 
             // 3. Signal Generation
-            if (analysis.contradictionScore > 50) {
+            // Accept if Score > 50 OR if we found a relevant Gov Doc/Standard News (even if score is low)
+            if (analysis.contradictionScore > 50 || signalSource === 'OFFICIAL_GOV' || signalSource === 'STANDARD_NEWS') {
                 // Calculate Freshness
                 // Mock liquidity for now if API doesn't provide it, or use volume
                 const liquidity = Number(market.volume) || 0;
@@ -151,6 +152,8 @@ export async function runScan(): Promise<ScanResult> {
                 } as any);
 
                 signalsFound++;
+            } else {
+                await log('info', `Rejected: Low Score (${analysis.contradictionScore}) for ${market.question}`);
             }
 
         } catch (error) {
