@@ -5,6 +5,8 @@ const nextConfig = {
         // your project has ESLint errors.
         ignoreDuringBuilds: true,
     },
+    // Force new build hash
+    poweredByHeader: false,
 }
 
 module.exports = nextConfig
