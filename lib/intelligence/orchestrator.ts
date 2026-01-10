@@ -70,6 +70,9 @@ export async function runScan(): Promise<ScanResult> {
                 continue;
             }
 
+            // Rate Limit Protection: Wait 4 seconds to stay under 15 RPM (Free Tier)
+            await new Promise(resolve => setTimeout(resolve, 4000));
+
             const analysis = await analyzeContradiction(market, {
                 title: article.title,
                 source: article.source,
