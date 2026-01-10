@@ -25,23 +25,13 @@ const LANG_MAP: Record<string, string> = {
 export async function queryNonEnglishNews(keywords: string[], languages: string[] = ['es', 'pt', 'zh', 'de']): Promise<NewsArticle[]> {
     try {
         const mappedLanguages = languages.map(l => LANG_MAP[l] || l);
-        const langQuery = mappedLanguages.map(lang => `sourcelang:${lang}`).join(' OR ');
-        const keywordQuery = keywords.map(k => `"${k}"`).join(' OR ');
+        const langQuery = `(sourcelang:${mappedLanguages.join(' OR sourcelang:')})`;
 
-        // GDELT requires very specific syntax. Parentheses only if OR is involved.
-        let fullQuery = '';
+        // Improve query: Don't quote single words to avoid "phrase too short" errors.
+        const formattedKeywords = keywords.join(' OR ');
 
-        if (languages.length > 1) {
-            fullQuery += `(${langQuery}) `;
-        } else {
-            fullQuery += `${langQuery} `;
-        }
-
-        if (keywords.length > 1) {
-            fullQuery += `(${keywordQuery})`;
-        } else {
-            fullQuery += `${keywordQuery}`;
-        }
+        // Construct the query: (sourcelang:por OR sourcelang:spa) (keyword1 OR keyword2)
+        const fullQuery = `${langQuery} (${formattedKeywords})`;
 
         console.log('GDELT Query:', fullQuery);
 
@@ -57,13 +47,14 @@ export async function queryNonEnglishNews(keywords: string[], languages: string[
         });
 
         if (response.data && response.data.articles) {
-            return response.data.articles.map((article: Record<string, string>) => ({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return response.data.articles.map((article: any) => ({
                 url: article.url,
                 title: article.title,
                 language: article.language || 'unknown',
                 source: article.domain,
                 date: article.seendate,
-                contentSnippet: article.seendate
+                contentSnippet: article.seendate // GDELT often lacks snippets in basic calls
             }));
         } else {
             console.log('GDELT No articles found. Response data:', JSON.stringify(response.data)?.substring(0, 200));
