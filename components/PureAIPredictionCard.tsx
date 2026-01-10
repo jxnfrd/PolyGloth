@@ -2,8 +2,8 @@ import React from 'react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function PureAIPredictionCard({ prediction }: { prediction: any }) {
-    const isHigh = prediction.confidence === 'high';
-    const isMedium = prediction.confidence === 'medium';
+    const isHigh = prediction.confidence_level === 'high';
+    const isMedium = prediction.confidence_level === 'medium';
 
     return (
         <div className="overflow-hidden rounded-xl bg-gray-900 ring-1 ring-white/10 hover:ring-purple-500/50 transition-all duration-300">
@@ -15,10 +15,10 @@ export default function PureAIPredictionCard({ prediction }: { prediction: any }
                             ✨ PURE AI ESTIMATION
                         </span>
                         <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${isHigh ? 'bg-green-400/10 text-green-400 ring-green-400/20' :
-                                isMedium ? 'bg-yellow-400/10 text-yellow-400 ring-yellow-400/20' :
-                                    'bg-red-400/10 text-red-400 ring-red-400/20'
+                            isMedium ? 'bg-yellow-400/10 text-yellow-400 ring-yellow-400/20' :
+                                'bg-red-400/10 text-red-400 ring-red-400/20'
                             }`}>
-                            {prediction.confidence?.toUpperCase() || 'MEDIUM'} CONFIDENCE
+                            {prediction.confidence_level?.toUpperCase() || 'MEDIUM'} CONFIDENCE
                         </span>
                     </div>
                 </div>

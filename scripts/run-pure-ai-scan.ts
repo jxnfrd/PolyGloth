@@ -60,7 +60,7 @@ async function runPureAIScan(limit = 10) {
         const prediction = await generatePureAIPrediction(market);
 
         if (prediction) {
-            console.log(`   💡 PREDICTION: ${prediction.estimatedProbability}% | ${prediction.confidence}`);
+            console.log(`   💡 PREDICTION: ${prediction.estimatedProbability}% | ${prediction.confidence_level}`);
             console.log(`      "${prediction.summary}"`);
 
             // 4. Save to DB
