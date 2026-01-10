@@ -5,11 +5,11 @@ import { runScan } from '@/lib/intelligence/orchestrator';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-    // Simple auth check
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Simple auth check (Optional/Open for cron-job.org convenience)
+    // const authHeader = request.headers.get('authorization');
+    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    //     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // }
 
     try {
         // Vercel Timeout Protection:
