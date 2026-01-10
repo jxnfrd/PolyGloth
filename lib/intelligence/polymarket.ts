@@ -33,7 +33,7 @@ export async function fetchActiveMarkets(limit: number = 50): Promise<Market[]> 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return response.data.map((m: any) => ({
                 id: m.id,
-                slug: m.slug || m.question.toLowerCase().replace(/ /g, '-'),
+                slug: m.slug || m.question.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
                 question: m.question,
                 description: m.description || '',
                 outcomes: JSON.stringify(m.outcomes),

@@ -1,79 +1,53 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Initialize Gemini 1.5 Flash lazily
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let model: any = null;
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
 
-function getModel() {
-    if (!model) {
-        const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
-        model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
-            generationConfig: { responseMimeType: "application/json" }
-        });
-    }
-    return model;
-}
-
-export interface AnalysisResult {
-    keyFinding: string;
-    evidenceType: 'Anecdotal' | 'Statistical' | 'Expert Consensus' | 'Official Statement';
-    contradictionScore: number; // 0-100
-    confidence: 'High' | 'Medium' | 'Low';
-}
-
-// Define types for inputs
-interface MarketEvent {
-    question: string;
-    description: string;
-    outcomePrices: string; // JSON string
-}
-
-interface NewsArticleInput {
-    title: string;
-    source: string;
-    date: string;
-}
-
-export async function analyzeContradiction(marketEvent: MarketEvent, newsArticle: NewsArticleInput): Promise<AnalysisResult | null> {
-    const prompt = `
-    You are a rigorous intelligence analyst.
-    Your goal is to determine if the Foreign News Article contradicts the implied sentiment of the Prediction Market.
-    
-    Prediction Market:
-    Question: "${marketEvent.question}"
-    Description: "${marketEvent.description}"
-    Current Outcome Prices: ${JSON.stringify(marketEvent.outcomePrices)}
-    
-    Foreign News Article:
-    Title: "${newsArticle.title}"
-    Source: "${newsArticle.source}"
-    Date: "${newsArticle.date}"
-    (Note: The article content matches keywords relevant to the market).
-
-    Analyze:
-    1. What is the market pricing in (e.g. "90% chance of X")?
-    2. Does the news article provide new information that arguably changes those odds?
-    3. Is there a contradiction?
-
-    Return valid JSON ONLY matching this structure:
-    {
-        "keyFinding": "One sentence summary of the signal.",
-        "evidenceType": "One of [Anecdotal, Statistical, Expert Consensus, Official Statement]",
-        "contradictionScore": 0-100 (where 100 is total contradiction),
-        "confidence": "High/Medium/Low"
-    }
-    `;
-
+export async function analyzeContradiction(market: any, article: any): Promise<any> {
     try {
-        const modelInstance = getModel();
-        const result = await modelInstance.generateContent(prompt);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const prompt = `
+        You are a **Forensic News Analyst**. Your job is to detect INFORMATION ASYMMETRY between local news and US Prediction Markets.
+        
+        **Market:** "${market.question}"
+        **News Source:** "${article.title}" (Date: ${article.date}, Source: ${article.source})
+        
+        **Your Task:**
+        Analyze if this news article contradicts the current market assumption.
+        
+        **Scoring Framework:**
+        1. **Freshness (0-30):** Is this breaking news?
+        2. **Source Quality (0-25):** Tier 1 outlet or official govt source?
+        3. **Evidence Clarity (0-25):** Direct quote > Paraphrase > Speculation.
+        4. **Language Advantage (0-20):** Is this hard to find in English?
+        
+        **Signal Tiers:**
+        - **Tier 1 (80+ pts):** High Confidence Contradiction (Trade Signal)
+        - **Tier 2 (60-79 pts):** Moderate Divergence (Watchlist)
+        - **Tier 3 (<60 pts):** Information Context (Noise)
+
+        Return ONLY a JSON object:
+        {
+            "keyFinding": "One powerful sentence summary",
+            "evidenceType": "official_document" | "direct_quote" | "expert_analysis" | "rumor",
+            "contradictionScore": number (0-100),
+            "confidence": "High" | "Medium" | "Low",
+            "tier": 1 | 2 | 3,
+            "timeAdvantageHours": number (estimated),
+            "reasoning": "Brief explanation of the score"
+        }
+        `;
+
+        const result = await model.generateContent(prompt);
         const response = result.response;
         const text = response.text();
 
-        return JSON.parse(text) as AnalysisResult;
+        // Clean markdown code blocks if present
+        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        return JSON.parse(jsonStr);
     } catch (error) {
-        console.error('Error in analyzeContradiction:', error);
-        return null; // Handle error gracefully
+        console.error('AI Analysis failed:', error);
+        return null;
     }
 }

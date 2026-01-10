@@ -81,13 +81,16 @@ export async function runScan(): Promise<ScanResult> {
 
                 await supabase.from('contrarian_signals').insert({
                     market_id: market.id,
+                    market_slug: market.slug,
                     market_title: market.question,
                     article_url: article.url,
                     article_language: article.language,
                     key_finding: analysis.keyFinding,
                     evidence_type: analysis.evidenceType,
                     contradiction_score: analysis.contradictionScore,
-                    confidence: analysis.confidence
+                    confidence: analysis.confidence,
+                    tier: analysis.tier,
+                    time_advantage_hours: analysis.timeAdvantageHours
                 });
 
                 signalsFound++;

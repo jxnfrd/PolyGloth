@@ -12,27 +12,59 @@ export default async function Dashboard() {
             <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {signals && signals.length > 0 ? (
                     signals.map((signal: any) => (
-                        <div key={signal.id} className="overflow-hidden rounded-xl bg-gray-900 ring-1 ring-white/10">
+                        <div key={signal.id} className="overflow-hidden rounded-xl bg-gray-900 ring-1 ring-white/10 hover:ring-indigo-500/50 transition-all duration-300">
                             <div className="p-6">
-                                <div className="flex items-center justify-between gap-x-4">
-                                    <div className="text-sm leading-6 text-gray-400">{new Date(signal.created_at).toLocaleDateString()}</div>
+                                <div className="flex items-center justify-between gap-x-4 mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${signal.tier === 1 ? 'bg-indigo-400/10 text-indigo-400 ring-indigo-400/20' :
+                                            signal.tier === 2 ? 'bg-blue-400/10 text-blue-400 ring-blue-400/20' :
+                                                'bg-gray-400/10 text-gray-400 ring-gray-400/20'
+                                            }`}>
+                                            TIER {signal.tier || '3'}
+                                        </div>
+                                        <div className="text-xs text-gray-400">
+                                            {signal.time_advantage_hours ? `${signal.time_advantage_hours}h Advantage` : ''}
+                                        </div>
+                                    </div>
                                     <div className={`rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${signal.confidence === 'High' ? 'bg-green-400/10 text-green-400 ring-green-400/20' :
                                         signal.confidence === 'Medium' ? 'bg-yellow-400/10 text-yellow-400 ring-yellow-400/20' :
                                             'bg-red-400/10 text-red-400 ring-red-400/20'
                                         }`}>
-                                        {signal.confidence} Confidence
+                                        {signal.confidence}
                                     </div>
                                 </div>
-                                <h3 className="mt-4 text-lg font-semibold leading-6 text-white">{signal.market_title}</h3>
-                                <p className="mt-4 text-sm leading-6 text-gray-300">{signal.key_finding}</p>
-                                <div className="mt-6 border-t border-gray-800 pt-6">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-400">Contradiction Score:</span>
-                                        <span className="font-semibold text-white">{signal.contradiction_score}/100</span>
+
+                                <h3 className="text-lg font-semibold leading-6 text-white min-h-[3rem] line-clamp-2">
+                                    {signal.market_title}
+                                </h3>
+
+                                <p className="mt-4 text-sm leading-6 text-gray-300 line-clamp-3">
+                                    {signal.key_finding}
+                                </p>
+
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <span className="inline-flex items-center rounded-full bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
+                                        {signal.evidence_type?.replace('_', ' ') || 'Analysis'}
+                                    </span>
+                                    <span className="inline-flex items-center rounded-full bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
+                                        Score: {signal.contradiction_score}/100
+                                    </span>
+                                </div>
+
+                                <div className="mt-6 border-t border-gray-800 pt-6 flex justify-between items-center">
+                                    <div className="text-xs text-gray-500 max-w-[50%] truncate">
+                                        Src: <a href={signal.article_url} target="_blank" className="hover:text-indigo-400 underline decoration-gray-700 underline-offset-2">
+                                            {new URL(signal.article_url).hostname.replace('www.', '')}
+                                        </a>
                                     </div>
-                                    <div className="mt-2 text-xs text-gray-500 truncate">
-                                        Src: <a href={signal.article_url} target="_blank" className="hover:text-indigo-400">{signal.article_url}</a>
-                                    </div>
+
+                                    <a
+                                        href={`/api/track/click?signal_id=${signal.id}&slug=${signal.market_slug}`}
+                                        target="_blank"
+                                        className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                                    >
+                                        View Market &rarr;
+                                    </a>
                                 </div>
                             </div>
                         </div>
