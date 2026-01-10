@@ -138,33 +138,40 @@ export async function runScan(): Promise<ScanResult> {
                     freshness: freshness.score
                 });
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await supabase.from('contrarian_signals').insert({
+                const payload = {
                     market_id: market.id,
-                    market_slug: market.slug,
+                    market_slug: market.slug || `market-${market.id}`, // Fallback if slug missing
                     market_title: market.question,
-                    market_liquidity: liquidity,
+                    market_liquidity: isNaN(liquidity) ? 0 : liquidity,
 
-                    article_url: article.url,
-                    article_language: 'en', // Advanced usually finds EN unless specified
-                    source_outlet: article.domain, // Use domain for Authority
+                    article_url: article.url || 'https://google.com',
+                    article_language: 'en',
+                    source_outlet: article.domain || 'Unknown',
                     news_published_at: newsDate.toISOString(),
 
-                    source_credibility: signalSource === 'OFFICIAL_GOV' ? 'high' : 'medium',
+                    source_credibility: (signalSource === 'OFFICIAL_GOV' ? 'high' : 'medium') as 'high' | 'medium' | 'low',
 
-                    key_finding: analysis.keyFinding,
-                    evidence_type: evidenceType,
-                    contradiction_score: analysis.contradictionScore,
-                    confidence: analysis.confidence,
-                    tier: analysis.tier,
-                    time_advantage_hours: analysis.timeAdvantageHours,
+                    key_finding: analysis.keyFinding || "No finding",
+                    evidence_type: evidenceType || "NEWS_MEDIA",
+                    contradiction_score: analysis.contradictionScore || 0,
+                    confidence: analysis.confidence || "Low",
+                    tier: analysis.tier || 3,
+                    time_advantage_hours: analysis.timeAdvantageHours || 0,
 
                     freshness_score: freshness.score,
                     indicator_color: freshness.color,
                     processing_log: [`Generated via Orchestrator V2 (Source: ${signalSource}) at ${new Date().toISOString()}`]
-                } as any);
+                };
 
-                signalsFound++;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { error: insertError } = await supabase.from('contrarian_signals').insert(payload as any);
+
+                if (insertError) {
+                    await log('error', `DB Insert Failed for ${market.question}`, { error: insertError, payload });
+                    console.error('CRITICAL DB ERROR:', insertError, payload);
+                } else {
+                    signalsFound++;
+                }
             } else {
                 await log('info', `Rejected: Low Score (${analysis.contradictionScore}) for ${market.question}`);
             }
