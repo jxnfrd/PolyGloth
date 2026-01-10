@@ -20,12 +20,13 @@ export async function GET(request: NextRequest) {
 
         // Fire and forget logging (don't block redirect too long)
         // We use 'await' but it should be fast.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await supabase.from('signal_interactions').insert({
             signal_id: signalId,
             user_id: user?.id || null, // Track user if logged in, otherwise null
             action: 'click_link',
             clicked_url: targetUrl
-        });
+        } as any);
 
     } catch (error) {
         console.error('Tracking error:', error);
