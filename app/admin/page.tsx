@@ -62,6 +62,34 @@ export default async function AdminDashboard() {
                 </div>
             </div>
 
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-4 mb-10">
+                <div className="overflow-hidden rounded-lg bg-gray-900 px-4 py-5 shadow sm:p-6 ring-1 ring-white/10">
+                    <dt className="truncate text-sm font-medium text-gray-400">Total Signals</dt>
+                    <dd className="mt-1 text-3xl font-semibold tracking-tight text-white">
+                        {stats?.[0]?.total_signals || 0}
+                    </dd>
+                </div>
+                <div className="overflow-hidden rounded-lg bg-gray-900 px-4 py-5 shadow sm:p-6 ring-1 ring-white/10">
+                    <dt className="truncate text-sm font-medium text-gray-400">Active Users (24h)</dt>
+                    <dd className="mt-1 text-3xl font-semibold tracking-tight text-white">
+                        {stats?.[0]?.active_users || 0}
+                    </dd>
+                </div>
+                <div className="overflow-hidden rounded-lg bg-gray-900 px-4 py-5 shadow sm:p-6 ring-1 ring-white/10">
+                    <dt className="truncate text-sm font-medium text-gray-400">Avg Contradiction Score</dt>
+                    <dd className="mt-1 text-3xl font-semibold tracking-tight text-indigo-400">
+                        {Math.round(stats?.[0]?.avg_score || 0)}%
+                    </dd>
+                </div>
+                <div className="overflow-hidden rounded-lg bg-gray-900 px-4 py-5 shadow sm:p-6 ring-1 ring-white/10">
+                    <dt className="truncate text-sm font-medium text-gray-400">Polymarket Clicks</dt>
+                    <dd className="mt-1 text-3xl font-semibold tracking-tight text-green-400">
+                        {stats?.[0]?.polymarket_clicks || 0}
+                    </dd>
+                </div>
+            </div>
+
             {/* Main Content Areas with Tabs */}
             <AdminClientView signals={signals || []} logs={logs || []} />
         </div>
