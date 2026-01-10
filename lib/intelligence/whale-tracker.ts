@@ -1,10 +1,9 @@
 import * as cheerio from 'cheerio';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-
-dotenv.config({ path: '.env.local' });
 
 // Initialize Supabase
+// Note: In Next.js, process.env is populated automatically.
+// In standalone scripts, ensure dotenv is loaded BEFORE importing this class.
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
