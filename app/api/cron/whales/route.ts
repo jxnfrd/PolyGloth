@@ -9,8 +9,11 @@ export async function GET(request: Request) {
         console.log('🐳 Cron: Starting Whale Scan...');
         const tracker = new WhaleTracker();
 
-        // Scan top 15 traders
-        await tracker.updateTopTraders(15);
+        // TIMEOUT FIX:
+        // Scan only 2 traders randomly selected from the Top 20.
+        // This keeps execution under 10 seconds (Serverless Limit).
+        // Cron should run more frequently (e.g., every 15-30 mins) to compensate.
+        await tracker.updateTopTraders(2, 20);
 
         return NextResponse.json({ success: true, message: 'Whale scan complete' });
     } catch (error: any) {

@@ -34,10 +34,12 @@ export class WhaleTracker {
     // Helper: Fetch with User-Agent
     private async fetchWithDelay(url: string) {
         console.log(`   🕸️ Fetching: ${url}`);
-        await this.delay(5000); // 5s delay
+        // Reduced delay for Serverless Timeout compliance (1s vs 5s)
+        await this.delay(1000);
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'PolyGlot-Intelligence/1.0 (Whale Research Bot; +https://polygloth.com)',
+                // Vary User-Agent slightly to avoid simple fingerprinting if needed
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml'
             }
         });
@@ -48,16 +50,23 @@ export class WhaleTracker {
     }
 
     // 1. Orchestrator
-    async updateTopTraders(limit = 10) {
-        console.log(`🐳 Starting Whale Scan (Top ${limit})...`);
+    async updateTopTraders(scanCount = 2, poolSize = 20) {
+        console.log(`🐳 Starting Whale Scan (Pooling Top ${poolSize}, Scanning ${scanCount})...`);
 
         try {
             // A. Fetch Leaderboard
             const leaderboardHtml = await this.fetchWithDelay(`${this.BASE_URL}/leaderboard`);
-            const traders = this.parseLeaderboard(leaderboardHtml, limit);
-            console.log(`✅ Found ${traders.length} traders on leaderboard.`);
+            // Parse MORE traders than we need (pool), then randomly select a few to scan
+            const allTraders = this.parseLeaderboard(leaderboardHtml, poolSize);
 
-            for (const trader of traders) {
+            // Randomly shuffle and slice to avoid timeouts
+            const targets = allTraders
+                .sort(() => 0.5 - Math.random())
+                .slice(0, scanCount);
+
+            console.log(`✅ Selected ${targets.length} targets from top ${poolSize}.`);
+
+            for (const trader of targets) {
                 // B. Upsert Trader to DB
                 const dbTraderId = await this.upsertTrader(trader);
                 if (!dbTraderId) continue;
