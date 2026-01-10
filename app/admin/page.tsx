@@ -3,6 +3,21 @@ import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
+interface AdminStats {
+    total_signals: number;
+    active_users: number;
+    avg_score: number;
+    polymarket_clicks: number;
+}
+
+interface Signal {
+    id: string;
+    market_title: string;
+    tier: number;
+    contradiction_score: number;
+    evidence_type: string;
+}
+
 export default async function AdminDashboard() {
     const supabase = await createClient();
 
@@ -12,9 +27,12 @@ export default async function AdminDashboard() {
         return redirect('/signin');
     }
 
-    // 2. Fetch Analytics
-    const { data: stats, error } = await supabase.from('admin_dashboard').select('*').limit(7);
-    const { data: signals } = await supabase.from('contrarian_signals').select('*').order('created_at', { ascending: false }).limit(20);
+    // 2. Fetch Analytics (with manual typing since View types aren't generated yet)
+    const { data: statsRaw, error } = await supabase.from('admin_dashboard').select('*').limit(1);
+    const stats = statsRaw as unknown as AdminStats[];
+
+    const { data: signalsRaw } = await supabase.from('contrarian_signals').select('*').order('created_at', { ascending: false }).limit(20);
+    const signals = signalsRaw as unknown as Signal[];
 
     if (error) {
         console.error('Admin fetch error:', error);
@@ -84,7 +102,7 @@ export default async function AdminDashboard() {
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
                                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${signal.tier === 1 ? 'bg-indigo-400/10 text-indigo-400 ring-indigo-400/20' :
-                                            'bg-gray-400/10 text-gray-400 ring-gray-400/20'
+                                        'bg-gray-400/10 text-gray-400 ring-gray-400/20'
                                         }`}>
                                         Tier {signal.tier || 3}
                                     </span>
