@@ -71,6 +71,21 @@ export class SourceRouter {
             })());
         }
 
+        // Fiscal Data (Treasury) - Regex for "Real", "Peso", "Yen" etc or "Exchange Rate"
+        if (titleUpper.includes('EXCHANGE RATE') || titleUpper.includes('FOREX') || titleUpper.includes('REAL') || titleUpper.includes('PESO')) {
+            tasks.push((async () => {
+                // Example: Search for Brazil Real if not found by AlphaVantage or as supplementary
+                // Ideally we map Country -> Currency, but for now we look for generic matches or specific ones
+                const { fetchTreasuryData } = await import('./sources/fiscaldata');
+                // Simple example: default to checking a few major ones or dynamic filter if possible
+                // For this V1, let's just fetch Brazil/Canada/Mexico if mentioned
+                if (titleUpper.includes('BRAZIL') || titleUpper.includes('REAL')) {
+                    const data = await fetchTreasuryData('v1/accounting/od/rates_of_exchange', { 'country_currency_desc': 'eq:Brazil-Real' });
+                    if (data) context.forex?.push({ source: 'FISCALDATA', from: 'USD', to: 'BRL', rate: parseFloat(data.exchange_rate), date: data.record_date });
+                }
+            })());
+        }
+
         // World Bank examples
         if (titleUpper.includes('CHINA GDP') || titleUpper.includes('CHINESE GROWTH')) {
             tasks.push((async () => {

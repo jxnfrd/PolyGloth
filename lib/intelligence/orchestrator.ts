@@ -34,7 +34,7 @@ export async function runScan(limit?: number): Promise<ScanResult> {
     // Increase limit for better testing of filtering
     const initialLimit = 30; // Define the initial limit for fetching
     let markets = await fetchActiveMarkets(initialLimit); // Use 'let' because 'markets' will be reassigned
-    await log('info', `Fetched ${markets.length} active markets`);
+    await log('info', `[MARKET_DISCOVERY] Fetched ${markets.length} active markets`);
 
     // Vercel Optimization:
     // If scanning a small batch, randomize the order so we don't always check the same top markets.
@@ -46,7 +46,7 @@ export async function runScan(limit?: number): Promise<ScanResult> {
     markets = markets.slice(0, initialLimit); // Slice to the actual limit
 
     console.log(`[INFO] Processing batch of ${markets.length} markets...`);
-    await log('info', `Starting scan cycle for ${markets.length} markets (Batch Mode)`);
+    await log('info', `[MARKET_DISCOVERY] Starting scan cycle for ${markets.length} markets (Batch Mode)`);
 
     for (const market of markets) {
         try {
@@ -115,9 +115,10 @@ export async function runScan(limit?: number): Promise<ScanResult> {
             // --- PHASE 3: FETCH FINANCIAL DATA ---
             const { SourceRouter } = await import('./source-router');
             const router = new SourceRouter();
+            await log('info', `[CONTEXT_COLLECTION] For market '${market.question.substring(0, 20)}...': Querying configured APIs...`);
             const financialContext = await router.routeAndFetch(market.question, keywords);
 
-            await log('info', `Context Gathered: ${financialContext.fundamentals?.length || 0} stocks, ${financialContext.economics?.length || 0} macro indicators`);
+            await log('info', `[CONTEXT_COLLECTION] Result: ${financialContext.fundamentals?.length || 0} stocks, ${financialContext.economics?.length || 0} macro indicators`);
 
             const analysis = await analyzeContradiction(market, {
                 title: article.title,
@@ -140,7 +141,7 @@ export async function runScan(limit?: number): Promise<ScanResult> {
 
                 const evidenceType = signalSource === 'OFFICIAL_GOV' ? 'OFFICIAL_DOCUMENT' : analysis.evidenceType;
 
-                await log('info', `Signal Found! [${signalSource}] ${freshness.label}`, {
+                await log('info', `[SIGNAL_GENERATION] Signal Found! [${signalSource}] ${freshness.label}`, {
                     market: market.question,
                     score: analysis.contradictionScore,
                     freshness: freshness.score
