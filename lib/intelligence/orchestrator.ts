@@ -132,57 +132,63 @@ export async function runScan(limit?: number): Promise<ScanResult> {
             }
 
             // 3. Signal Generation
-            // Accept if Score > 50 OR if we found a relevant Gov Doc/Standard News (even if score is low)
+            // Decide Status based on thresholds
+            let status = 'REJECTED';
             if (analysis.contradictionScore > 50 || signalSource === 'OFFICIAL_GOV' || signalSource === 'STANDARD_NEWS') {
-                // Calculate Freshness
-                // Mock liquidity for now if API doesn't provide it, or use volume
-                const liquidity = Number(market.volume) || 0;
-                const freshness = calculateFreshnessScore(newsDate, liquidity, analysis.contradictionScore, analysis.confidence);
+                status = 'ACTIVE';
+            }
 
-                const evidenceType = signalSource === 'OFFICIAL_GOV' ? 'OFFICIAL_DOCUMENT' : analysis.evidenceType;
+            // Calculate Freshness
+            const liquidity = Number(market.volume) || 0;
+            const freshness = calculateFreshnessScore(newsDate, liquidity, analysis.contradictionScore, analysis.confidence);
+            const evidenceType = signalSource === 'OFFICIAL_GOV' ? 'OFFICIAL_DOCUMENT' : analysis.evidenceType;
 
-                await log('info', `[SIGNAL_GENERATION] Signal Found! [${signalSource}] ${freshness.label}`, {
-                    market: market.question,
-                    score: analysis.contradictionScore,
-                    freshness: freshness.score
-                });
+            const logMsg = status === 'ACTIVE'
+                ? `[SIGNAL_GENERATION] Signal Found! [${signalSource}] ${freshness.label}`
+                : `[SIGNAL_GENERATION] Signal Rejected (Low Score: ${analysis.contradictionScore})`;
 
-                const payload = {
-                    market_id: market.id,
-                    market_slug: market.slug || `market-${market.id}`, // Fallback if slug missing
-                    market_title: market.question,
-                    market_liquidity: isNaN(liquidity) ? 0 : liquidity,
+            await log(status === 'ACTIVE' ? 'info' : 'warning', logMsg, {
+                market: market.question,
+                score: analysis.contradictionScore,
+                status: status
+            });
 
-                    article_url: article.url || 'https://google.com',
-                    article_language: 'en',
-                    source_outlet: article.domain || 'Unknown',
-                    news_published_at: newsDate.toISOString(),
+            const payload = {
+                market_id: market.id,
+                market_slug: market.slug || `market-${market.id}`,
+                market_title: market.question,
+                market_liquidity: isNaN(liquidity) ? 0 : liquidity,
 
-                    source_credibility: (signalSource === 'OFFICIAL_GOV' ? 'high' : 'medium') as 'high' | 'medium' | 'low',
+                article_url: article.url || 'https://google.com',
+                article_language: 'en',
+                source_outlet: article.domain || 'Unknown',
+                news_published_at: newsDate.toISOString(),
 
-                    key_finding: analysis.keyFinding || "No finding",
-                    evidence_type: evidenceType || "NEWS_MEDIA",
-                    contradiction_score: analysis.contradictionScore || 0,
-                    confidence: analysis.confidence || "Low",
-                    tier: analysis.tier || 3,
-                    time_advantage_hours: analysis.timeAdvantageHours || 0,
+                source_credibility: (signalSource === 'OFFICIAL_GOV' ? 'high' : 'medium') as 'high' | 'medium' | 'low',
 
-                    freshness_score: freshness.score,
-                    indicator_color: freshness.color,
-                    processing_log: [`Generated via Orchestrator V2 (Source: ${signalSource}) at ${new Date().toISOString()}`]
-                };
+                key_finding: analysis.keyFinding || "No finding",
+                evidence_type: evidenceType || "NEWS_MEDIA",
+                contradiction_score: analysis.contradictionScore || 0,
+                confidence: analysis.confidence || "Low",
+                tier: analysis.tier || 3,
+                time_advantage_hours: analysis.timeAdvantageHours || 0,
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { error: insertError } = await supabase.from('contrarian_signals').insert(payload as any);
+                freshness_score: freshness.score,
+                indicator_color: freshness.color,
+                processing_log: [`Generated via Orchestrator V2 (Source: ${signalSource}) at ${new Date().toISOString()}`],
 
-                if (insertError) {
-                    await log('error', `DB Insert Failed for ${market.question}`, { error: insertError, payload });
-                    console.error('CRITICAL DB ERROR:', insertError, payload);
-                } else {
-                    signalsFound++;
-                }
+                status: status // [NEW] Save status
+            };
+
+            // Insert into DB (Both ACTIVE and REJECTED)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { error: insertError } = await supabase.from('contrarian_signals').insert(payload as any);
+
+            if (insertError) {
+                await log('error', `DB Insert Failed for ${market.question}`, { error: insertError, payload });
+                console.error('CRITICAL DB ERROR:', insertError, payload);
             } else {
-                await log('info', `Rejected: Low Score (${analysis.contradictionScore}) for ${market.question}`);
+                if (status === 'ACTIVE') signalsFound++;
             }
 
         } catch (error) {

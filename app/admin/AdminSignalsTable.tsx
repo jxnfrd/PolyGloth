@@ -16,8 +16,8 @@ interface Signal {
     freshness_score?: number;
 }
 
-export default function AdminSignalsTable({ initialSignals }: { initialSignals: Signal[] }) {
-    const [strictMode, setStrictMode] = useState(true);
+export default function AdminSignalsTable({ initialSignals, defaultStrictMode = true }: { initialSignals: Signal[], defaultStrictMode?: boolean }) {
+    const [strictMode, setStrictMode] = useState(defaultStrictMode);
 
     const filteredSignals = initialSignals.filter(s => {
         if (strictMode) {
@@ -87,8 +87,8 @@ export default function AdminSignalsTable({ initialSignals }: { initialSignals: 
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
                                         <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${signal.tier === 1 ? 'bg-indigo-400/10 text-indigo-400 ring-indigo-400/20' :
-                                                signal.tier === 2 ? 'bg-yellow-400/10 text-yellow-400 ring-yellow-400/20' :
-                                                    'bg-gray-400/10 text-gray-400 ring-gray-400/20'
+                                            signal.tier === 2 ? 'bg-yellow-400/10 text-yellow-400 ring-yellow-400/20' :
+                                                'bg-gray-400/10 text-gray-400 ring-gray-400/20'
                                             }`}>
                                             Tier {signal.tier || 3}
                                         </span>

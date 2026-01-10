@@ -2,12 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PolymarketMarket } from './polymarket';
 import { StandardizedContext } from './types/sources';
 
-const API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-
-if (!API_KEY) {
-    console.error("[CRITICAL] NO GOOGLE_API_KEY or GEMINI_API_KEY FOUND IN ENVIRONMENT");
-}
-
 // Assuming AnalysisResult is defined elsewhere or will be defined.
 // For the purpose of this edit, we'll use 'any' if AnalysisResult is not provided.
 type AnalysisResult = any;
@@ -18,7 +12,9 @@ export async function analyzeContradiction(
     financialContext?: StandardizedContext
 ): Promise<AnalysisResult | null> {
     try {
+        const API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
         if (!API_KEY) throw new Error("Missing Google API Key");
+
         const genAI = new GoogleGenerativeAI(API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
