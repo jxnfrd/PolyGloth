@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from 'openai';
 import { PolymarketMarket } from "./polymarket";
 
 export interface PureAIPrediction {
@@ -12,15 +12,15 @@ export interface PureAIPrediction {
 }
 
 export async function generatePureAIPrediction(market: PolymarketMarket): Promise<PureAIPrediction | null> {
-    const API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    const API_KEY = process.env.OPENAI_API_KEY;
     if (!API_KEY) {
-        console.error("Missing GOOGLE_API_KEY for Pure AI Analyst");
+        console.error("Missing OPENAI_API_KEY for Pure AI Analyst");
         return null; // Fail gracefully
     }
 
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    // Use Flash for speed/cost efficiency as requested
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const openai = new OpenAI({
+        apiKey: API_KEY,
+    });
 
     const prompt = `
   You are a prediction market analyst. Analyze the following betting market and provide your estimation.
@@ -40,13 +40,25 @@ export async function generatePureAIPrediction(market: PolymarketMarket): Promis
   `;
 
     try {
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a helpful assistant that outputs strictly JSON."
+                },
+                {
+                    role: "user",
+                    content: prompt
+                }
+            ],
+            response_format: { type: "json_object" }
+        });
 
-        // Basic JSON cleanup if model adds markdown blocks
-        const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const content = response.choices[0].message.content;
+        if (!content) throw new Error("Empty response from OpenAI");
 
-        const prediction = JSON.parse(cleanJson);
+        const prediction = JSON.parse(content);
 
         // Validation
         if (!prediction.summary || !prediction.reasoning || typeof prediction.estimatedProbability !== 'number') {
@@ -60,7 +72,7 @@ export async function generatePureAIPrediction(market: PolymarketMarket): Promis
             reasoning: prediction.reasoning,
             estimatedProbability: prediction.estimatedProbability,
             confidence: prediction.confidence || "medium",
-            ai_model_used: "gemini-1.5-flash"
+            ai_model_used: "gpt-4o"
         };
 
     } catch (error) {
