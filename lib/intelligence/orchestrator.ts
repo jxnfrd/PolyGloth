@@ -68,6 +68,8 @@ export async function runScan(): Promise<ScanResult> {
 
             if (!strongestEvidence) {
                 // No advanced signal found
+                // Enable this log to see "what was checked" even if no signal found
+                await log('info', `Checked: ${market.question.substring(0, 50)}... (No Gov/Crisis signal)`);
                 continue;
             }
 
