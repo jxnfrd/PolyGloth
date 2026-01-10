@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import AdminLogsClient from './AdminLogsClient';
+import DeleteSignalButton from './DeleteSignalButton';
 
 export const dynamic = 'force-dynamic';
 
