@@ -33,7 +33,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { view
 
     return (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
-            <h1 className="text-3xl font-bold leading-tight tracking-tight text-white">PolyGlot Intelligence Dashboard</h1>
+            <h1 className="text-3xl font-bold leading-tight tracking-tight text-white">PolyGlot Dashboard V2 🚀</h1>
             <p className="mt-2 text-sm text-gray-400">Real-time market intelligence: News Arbitrage, Pure AI, & Whale Tracking.</p>
 
             <div className="mt-8">
