@@ -4,7 +4,7 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
 
 export async function analyzeContradiction(market: any, article: any): Promise<any> {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `
         You are a **Forensic News Analyst**. Your job is to detect INFORMATION ASYMMETRY between local news and US Prediction Markets.
