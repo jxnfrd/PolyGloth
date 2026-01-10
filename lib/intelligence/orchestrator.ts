@@ -9,7 +9,8 @@ export interface ScanResult {
     signalsFound: number;
 }
 
-export async function runScan(): Promise<ScanResult> {
+// Update signature to accept optional limit
+export async function runScan(limit?: number): Promise<ScanResult> {
     console.log('Starting intelligence scan (V2: Multi-Source)...');
     let signalsFound = 0;
     const { createClient } = await import('@supabase/supabase-js');
