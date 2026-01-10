@@ -1,6 +1,7 @@
 import { fetchActiveMarkets } from './polymarket';
-import { queryNonEnglishNews } from './gdelt';
+import { detectSignalSpikes, GdeltAdvancedArticle } from './gdelt-advanced';
 import { analyzeContradiction } from './analyst';
+import { calculateFreshnessScore } from './freshness';
 import { createClient } from '@/utils/supabase/server';
 
 export interface ScanResult {
@@ -9,11 +10,10 @@ export interface ScanResult {
 }
 
 export async function runScan(): Promise<ScanResult> {
-    console.log('Starting intelligence scan...');
+    console.log('Starting intelligence scan (V2: Multi-Source)...');
     let signalsFound = 0;
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-    const { calculateFreshnessScore } = await import('./freshness');
 
     // Helper to log process
     const log = async (level: 'info' | 'warning' | 'error', msg: string, meta?: any) => {
@@ -21,7 +21,7 @@ export async function runScan(): Promise<ScanResult> {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await supabase.from('processing_logs').insert({
             log_level: level,
-            component: 'Orchestrator',
+            component: 'Orchestrator V2',
             message: msg,
             metadata: meta
         } as any);
@@ -30,16 +30,12 @@ export async function runScan(): Promise<ScanResult> {
     await log('info', 'Starting new scan cycle');
 
     // 1. Fetch active markets
-    const markets = await fetchActiveMarkets(20); // Increased limit
-    await log('info', `Fetched ${markets.length} active markets`, { market_ids: markets.map(m => m.id) });
+    // Increase limit for better testing of filtering
+    const markets = await fetchActiveMarkets(30);
+    await log('info', `Fetched ${markets.length} active markets`);
 
     for (const market of markets) {
         try {
-            // STEP 1: Market Validation
-            // (Liquidity check > 5000 is mostly handled by API but good to verify if we had raw data)
-            // We assume fetchActiveMarkets filters for active/volume already.
-
-            // 2. Extract keywords
             const stopWords = new Set(['will', 'the', 'be', 'on', 'in', 'of', 'to', 'a', 'an', 'is', 'for', 'by', 'this', 'week', 'year', 'month', 'day']);
             const cleanQuestion = market.question
                 .replace(/[^\w\s]/g, '')
@@ -48,25 +44,40 @@ export async function runScan(): Promise<ScanResult> {
                 .slice(0, 4);
             const keywords = cleanQuestion;
 
-            // STEP 2: News Fetching
-            // Search in Portuguese and Spanish
-            const articles = await queryNonEnglishNews(keywords, ['pt', 'es']);
+            // --- V2 INTELLIGENCE: MULTI-SOURCE DETECTION ---
 
-            if (articles.length === 0) {
-                // Log silently or debug
-                // await log('info', `No news found for: ${market.question}`);
+            // 1. GDELT Advanced (Tone & Gov Docs)
+            // Check US tone first (default)
+            const spikes = await detectSignalSpikes(market.question, keywords, 'us'); // Default to US for now, could infer country from market
+
+            let strongestEvidence: GdeltAdvancedArticle | null = null;
+            let signalSource = 'NEWS_MEDIA';
+
+            // Priority 1: Government Official Docs (Highest Authority)
+            if (spikes.gov.length > 0) {
+                strongestEvidence = spikes.gov[0];
+                signalSource = 'OFFICIAL_GOV';
+                await log('info', `Found GOV DOC for: ${market.question}`, { url: strongestEvidence.url });
+            }
+            // Priority 2: Negative Tone Spike (Crisis/Panic)
+            else if (spikes.negative.length > 0) {
+                strongestEvidence = spikes.negative[0];
+                signalSource = 'NEWS_MEDIA'; // But distinct Tone Signal
+                await log('info', `Found NEGATIVE SPIKE (Tone ${strongestEvidence.tone}) for: ${market.question}`);
+            }
+
+            if (!strongestEvidence) {
+                // No advanced signal found
                 continue;
             }
 
-            // STEP 3: AI Analysis (Deep Check)
-            const article = articles[0]; // Take best match
-
-            // Check if news is recent enough for us (< 24h hard limit, score punishes >2h)
+            // 2. AI Analysis (Deep Check)
+            // Verify if the signal actually relates to the market
+            const article = strongestEvidence;
             const newsDate = new Date(article.date);
             const hoursOld = (new Date().getTime() - newsDate.getTime()) / (1000 * 60 * 60);
 
-            if (hoursOld > 24) {
-                await log('info', `News too old (${hoursOld.toFixed(1)}h) for: ${market.question}`);
+            if (hoursOld > 48) { // Allow slightly older for docs
                 continue;
             }
 
@@ -75,7 +86,7 @@ export async function runScan(): Promise<ScanResult> {
 
             const analysis = await analyzeContradiction(market, {
                 title: article.title,
-                source: article.source,
+                source: article.source || article.domain,
                 date: article.date
             });
 
@@ -84,15 +95,16 @@ export async function runScan(): Promise<ScanResult> {
                 continue;
             }
 
-            // STEP 4: Signal Generation
-            if (analysis.contradictionScore > 50) { // Lowered threshold to 50 to catch more, Tier logic handles quality
-
+            // 3. Signal Generation
+            if (analysis.contradictionScore > 50) {
                 // Calculate Freshness
                 // Mock liquidity for now if API doesn't provide it, or use volume
                 const liquidity = Number(market.volume) || 0;
                 const freshness = calculateFreshnessScore(newsDate, liquidity, analysis.contradictionScore, analysis.confidence);
 
-                await log('info', `Signal Found! ${freshness.label}`, {
+                const evidenceType = signalSource === 'OFFICIAL_GOV' ? 'OFFICIAL_DOCUMENT' : analysis.evidenceType;
+
+                await log('info', `Signal Found! [${signalSource}] ${freshness.label}`, {
                     market: market.question,
                     score: analysis.contradictionScore,
                     freshness: freshness.score
@@ -106,12 +118,14 @@ export async function runScan(): Promise<ScanResult> {
                     market_liquidity: liquidity,
 
                     article_url: article.url,
-                    article_language: article.language,
-                    source_outlet: article.source,
+                    article_language: 'en', // Advanced usually finds EN unless specified
+                    source_outlet: article.domain, // Use domain for Authority
                     news_published_at: newsDate.toISOString(),
 
+                    source_credibility: signalSource === 'OFFICIAL_GOV' ? 'high' : 'medium',
+
                     key_finding: analysis.keyFinding,
-                    evidence_type: analysis.evidenceType,
+                    evidence_type: evidenceType,
                     contradiction_score: analysis.contradictionScore,
                     confidence: analysis.confidence,
                     tier: analysis.tier,
@@ -119,13 +133,10 @@ export async function runScan(): Promise<ScanResult> {
 
                     freshness_score: freshness.score,
                     indicator_color: freshness.color,
-                    processing_log: [`Generated at ${new Date().toISOString()}`]
+                    processing_log: [`Generated via Orchestrator V2 (Source: ${signalSource}) at ${new Date().toISOString()}`]
                 } as any);
 
                 signalsFound++;
-            } else {
-                // Log why it failed (useful for "Authentication" of process)
-                // await log('info', `Low text correlation (${analysis.contradictionScore}%)`, { market: market.question });
             }
 
         } catch (error) {
@@ -137,7 +148,7 @@ export async function runScan(): Promise<ScanResult> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await supabase.from('matching_stats').insert({
         total_markets: markets.length,
-        markets_with_news: 0, // TODO: Track these counters properly in loop
+        markets_with_news: 0,
         signals_generated: signalsFound
     } as any);
 
