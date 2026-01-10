@@ -86,7 +86,7 @@ Date: "${evidence.date}"
             return JSON.parse(jsonMatch[0]);
         } catch (e) {
             // Last resort: simple cleanup
-            const simpleClean = text.replace(/```json / g, '').replace(/```/g, '').trim();
+            const simpleClean = text.replace(/```json/g, '').replace(/```/g, '').trim();
             return JSON.parse(simpleClean);
         }
     } catch (error) {

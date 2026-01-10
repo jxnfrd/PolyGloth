@@ -1,7 +1,7 @@
 import { fetchCompanyData } from './sources/aletheia';
 import { fetchForexRate, fetchNewsSentiment } from './sources/alphavantage';
-import { fetchEconomicSeries } from './sources/fred';
-import { fetchIndicator } from './sources/worldbank';
+import { fetchEconomicSeries } from './sources/fred-source';
+import { fetchIndicator } from './sources/worldbank-source';
 // import { fetchTreasuryData } from './sources/fiscaldata'; // Could be added for bond yields
 import { StandardizedContext } from './types/sources';
 
