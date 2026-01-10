@@ -41,10 +41,19 @@ export async function analyzeContradiction(market: any, article: any): Promise<a
         const response = result.response;
         const text = response.text();
 
-        // Clean markdown code blocks if present
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        // Robust JSON extraction
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error('No JSON found in response');
+        }
 
-        return JSON.parse(jsonStr);
+        try {
+            return JSON.parse(jsonMatch[0]);
+        } catch (e) {
+            // Last resort: simple cleanup
+            const simpleClean = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            return JSON.parse(simpleClean);
+        }
     } catch (error) {
         console.error('AI Analysis failed:', error);
         return null;
