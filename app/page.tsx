@@ -1,10 +1,22 @@
-export const dynamic = 'force-dynamic';
+import CryptoPricing from '@/components/ui/Pricing/CryptoPricing';
+import { createClient } from '@/utils/supabase/server';
+import {
+  getProducts,
+  getSubscription,
+  getUser
+} from '@/utils/supabase/queries';
 
-export default function Page() {
+export default async function PricingPage() {
+  const supabase = await createClient();
+  const [user, products, subscription] = await Promise.all([
+    getUser(supabase),
+    getProducts(supabase),
+    getSubscription(supabase)
+  ]);
+
   return (
-    <div>
-      <h2>System Recovery Online 🟢</h2>
-      <p>If you read this, the site pipeline is FIXED.</p>
-    </div>
+    <CryptoPricing
+      user={user}
+    />
   );
 }
