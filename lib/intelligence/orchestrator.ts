@@ -79,6 +79,7 @@ export async function runScan(): Promise<ScanResult> {
                 // 5. Store Signal
                 console.log(`High confidence signal found for: ${market.question}`);
 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await supabase.from('contrarian_signals').insert({
                     market_id: market.id,
                     market_slug: market.slug,
@@ -91,7 +92,7 @@ export async function runScan(): Promise<ScanResult> {
                     confidence: analysis.confidence,
                     tier: analysis.tier,
                     time_advantage_hours: analysis.timeAdvantageHours
-                });
+                } as any);
 
                 signalsFound++;
             }
