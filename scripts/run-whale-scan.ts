@@ -1,4 +1,7 @@
 import { WhaleTracker } from '../lib/intelligence/whale-tracker';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
 
 async function runWhaleScan() {
     console.log('🚀 Launching Whale Tracker...');
