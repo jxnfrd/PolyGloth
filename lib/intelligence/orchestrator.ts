@@ -11,63 +11,64 @@ export interface ScanResult {
 export async function runScan(): Promise<ScanResult> {
     console.log('Starting intelligence scan...');
     let signalsFound = 0;
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const { calculateFreshnessScore } = await import('./freshness');
+
+    // Helper to log process
+    const log = async (level: 'info' | 'warning' | 'error', msg: string, meta?: any) => {
+        console.log(`[${level.toUpperCase()}] ${msg}`);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await supabase.from('processing_logs').insert({
+            log_level: level,
+            component: 'Orchestrator',
+            message: msg,
+            metadata: meta
+        } as any);
+    };
+
+    await log('info', 'Starting new scan cycle');
 
     // 1. Fetch active markets
-    const markets = await fetchActiveMarkets(10); // Limit to 10 for now
-    console.log(`Fetched ${markets.length} active markets.`);
-
-    // Initialize Supabase Client
-    // Note: We need a way to use Supabase in a non-request context if this runs via script, 
-    // but headers/cookies might be missing. 
-    // For Cron API route it's fine. For script, we might need createClient from admin or handle env vars directly.
-    // The previously used `createClient` in `server.ts` uses `createServerComponentClient` which needs headers.
-    // We should use `createClient` from `@supabase/supabase-js` directly for background tasks if `server.ts` fails,
-    // but let's try to use the admin client logic if available or just raw supabase-js.
-    // Actually, `utils/supabase/admin.ts` likely has the admin client.
-
-    // Using locally imported admin client if possible or just standard client
-    // Let's assume we can use the admin client for writing signals.
-    /* 
-       import { toSupabase } from ... 
-       Actually, let's look at `utils/supabase/admin.ts` or similar.
-       If not available, I will init a direct client here for safety in background jobs.
-    */
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-    // Dynamic import to avoid issues if we are in a specific environment, 
-    // but standard import is fine for server-side.
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const markets = await fetchActiveMarkets(20); // Increased limit
+    await log('info', `Fetched ${markets.length} active markets`, { market_ids: markets.map(m => m.id) });
 
     for (const market of markets) {
         try {
+            // STEP 1: Market Validation
+            // (Liquidity check > 5000 is mostly handled by API but good to verify if we had raw data)
+            // We assume fetchActiveMarkets filters for active/volume already.
+
             // 2. Extract keywords
-            // Improve: Remove common words and keep significant terms.
-            // A simple approach: Remove "Will", "the", "be", "on", "in", "of", "to", "?", etc.
             const stopWords = new Set(['will', 'the', 'be', 'on', 'in', 'of', 'to', 'a', 'an', 'is', 'for', 'by', 'this', 'week', 'year', 'month', 'day']);
             const cleanQuestion = market.question
-                .replace(/[^\w\s]/g, '') // Remove punctuation
+                .replace(/[^\w\s]/g, '')
                 .split(' ')
                 .filter(w => !stopWords.has(w.toLowerCase()) && w.length > 2)
-                .slice(0, 4); // Take top 4 significant words
-
-            // Also add exact phrase if it's short enough, but for GDELT keywords are better separately OR'd or AND'd?
-            // GDELT `keyword1 keyword2` implies AND.
-            // We want broad search first.
+                .slice(0, 4);
             const keywords = cleanQuestion;
 
-            console.log(`Searching GDELT for: ${keywords.join(' ')}`);
-
-            // 3. Query GDELT
-            // We'll search in Portuguese and Spanish for now
+            // STEP 2: News Fetching
+            // Search in Portuguese and Spanish
             const articles = await queryNonEnglishNews(keywords, ['pt', 'es']);
 
-            if (articles.length === 0) continue;
+            if (articles.length === 0) {
+                // Log silently or debug
+                // await log('info', `No news found for: ${market.question}`);
+                continue;
+            }
 
-            // 4. Analyze the first/best article
-            const article = articles[0]; // Take the most recent/relevant
+            // STEP 3: AI Analysis (Deep Check)
+            const article = articles[0]; // Take best match
+
+            // Check if news is recent enough for us (< 24h hard limit, score punishes >2h)
+            const newsDate = new Date(article.date);
+            const hoursOld = (new Date().getTime() - newsDate.getTime()) / (1000 * 60 * 60);
+
+            if (hoursOld > 24) {
+                await log('info', `News too old (${hoursOld.toFixed(1)}h) for: ${market.question}`);
+                continue;
+            }
 
             const analysis = await analyzeContradiction(market, {
                 title: article.title,
@@ -75,32 +76,67 @@ export async function runScan(): Promise<ScanResult> {
                 date: article.date
             });
 
-            if (analysis && analysis.contradictionScore > 70) {
-                // 5. Store Signal
-                console.log(`High confidence signal found for: ${market.question}`);
+            if (!analysis) {
+                await log('warning', `AI Analysis failed for: ${market.question}`);
+                continue;
+            }
+
+            // STEP 4: Signal Generation
+            if (analysis.contradictionScore > 50) { // Lowered threshold to 50 to catch more, Tier logic handles quality
+
+                // Calculate Freshness
+                // Mock liquidity for now if API doesn't provide it, or use volume
+                const liquidity = market.volume || 0;
+                const freshness = calculateFreshnessScore(newsDate, liquidity, analysis.contradictionScore, analysis.confidence);
+
+                await log('info', `Signal Found! ${freshness.label}`, {
+                    market: market.question,
+                    score: analysis.contradictionScore,
+                    freshness: freshness.score
+                });
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await supabase.from('contrarian_signals').insert({
                     market_id: market.id,
                     market_slug: market.slug,
                     market_title: market.question,
+                    market_liquidity: liquidity,
+
                     article_url: article.url,
                     article_language: article.language,
+                    source_outlet: article.source,
+                    news_published_at: newsDate.toISOString(),
+
                     key_finding: analysis.keyFinding,
                     evidence_type: analysis.evidenceType,
                     contradiction_score: analysis.contradictionScore,
                     confidence: analysis.confidence,
                     tier: analysis.tier,
-                    time_advantage_hours: analysis.timeAdvantageHours
+                    time_advantage_hours: analysis.timeAdvantageHours,
+
+                    freshness_score: freshness.score,
+                    indicator_color: freshness.color,
+                    processing_log: [`Generated at ${new Date().toISOString()}`]
                 } as any);
 
                 signalsFound++;
+            } else {
+                // Log why it failed (useful for "Authentication" of process)
+                // await log('info', `Low text correlation (${analysis.contradictionScore}%)`, { market: market.question });
             }
 
         } catch (error) {
-            console.error(`Error processing market ${market.id}:`, error);
+            await log('error', `Error processing market ${market.id}`, error);
         }
     }
+
+    // Save Stats
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('matching_stats').insert({
+        total_markets: markets.length,
+        markets_with_news: 0, // TODO: Track these counters properly in loop
+        signals_generated: signalsFound
+    } as any);
 
     return { marketsScanned: markets.length, signalsFound };
 }
