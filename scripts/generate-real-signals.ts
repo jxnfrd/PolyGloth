@@ -52,7 +52,7 @@ async function runRealScan() {
     let markets = [];
     try {
         markets = await fetchActiveMarkets(20);
-    } catch (e) {
+    } catch (e: any) {
         console.error("Failed to fetch markets:", e);
         return;
     }
@@ -96,17 +96,19 @@ async function runRealScan() {
             } else {
                 console.log(`      -> No negative signals found, using generic check.`);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.log(`      -> GDELT Error (skipping): ${e.message}`);
         }
 
         // 5. AI ANALYSIS
         console.log(`   [AI] Generating Signal...`);
         try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const newsEvidence: any = topNews;
             const analysis = await analyzeContradiction(market, {
                 title: topNews.title,
                 source: topNews.source,
-                date: topNews.seendate || topNews.date || new Date().toISOString()
+                date: newsEvidence.seendate || newsEvidence.date || new Date().toISOString()
             }, context);
 
             if (analysis) {
