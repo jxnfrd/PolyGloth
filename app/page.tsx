@@ -1,4 +1,4 @@
-import Pricing from '@/components/ui/Pricing/Pricing';
+import CryptoPricing from '@/components/ui/Pricing/CryptoPricing';
 import { createClient } from '@/utils/supabase/server';
 import {
   getProducts,
@@ -15,10 +15,8 @@ export default async function PricingPage() {
   ]);
 
   return (
-    <Pricing
+    <CryptoPricing
       user={user}
-      products={products ?? []}
-      subscription={subscription}
     />
   );
 }

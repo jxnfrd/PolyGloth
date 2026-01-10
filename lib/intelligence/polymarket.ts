@@ -1,0 +1,53 @@
+import axios from 'axios';
+
+// Fallback to Gamma REST API as GraphQL endpoints are authenticated or removed
+const POLYMARKET_API_URL = 'https://gamma-api.polymarket.com/markets';
+
+export interface Market {
+    id: string;
+    slug: string;
+    question: string;
+    description: string;
+    outcomes: string;
+    outcomePrices: string;
+    volume: string;
+    liquidity: string;
+    startDate: string;
+    endDate: string;
+}
+
+export async function fetchActiveMarkets(limit: number = 50): Promise<Market[]> {
+    try {
+        const response = await axios.get(POLYMARKET_API_URL, {
+            params: {
+                limit: limit,
+                active: true,
+                closed: false,
+                volume_min: 50000,
+                order: 'volume',
+                ascending: false
+            }
+        });
+
+        if (response.data && Array.isArray(response.data)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return response.data.map((m: any) => ({
+                id: m.id,
+                slug: m.slug || m.question.toLowerCase().replace(/ /g, '-'),
+                question: m.question,
+                description: m.description || '',
+                outcomes: JSON.stringify(m.outcomes),
+                outcomePrices: JSON.stringify(m.outcomePrices),
+                volume: m.volume,
+                liquidity: m.liquidity,
+                startDate: m.startDate,
+                endDate: m.endDate
+            }));
+        }
+
+        return [];
+    } catch (error) {
+        console.error('Error fetching Polymarket markets:', error);
+        return [];
+    }
+}
