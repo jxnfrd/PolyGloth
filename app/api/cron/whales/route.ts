@@ -1,6 +1,7 @@
 import { WhaleTracker } from '@/lib/intelligence/whale-tracker';
 import { NextResponse } from 'next/server';
 
+// Force Vercel Rebuild - Timestamp: 2026-01-10
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
