@@ -86,7 +86,7 @@ export async function runScan(): Promise<ScanResult> {
 
                 // Calculate Freshness
                 // Mock liquidity for now if API doesn't provide it, or use volume
-                const liquidity = market.volume || 0;
+                const liquidity = Number(market.volume) || 0;
                 const freshness = calculateFreshnessScore(newsDate, liquidity, analysis.contradictionScore, analysis.confidence);
 
                 await log('info', `Signal Found! ${freshness.label}`, {
