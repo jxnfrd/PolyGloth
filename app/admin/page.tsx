@@ -55,7 +55,7 @@ export default async function AdminDashboard() {
             <div className="md:flex md:items-center md:justify-between mb-8">
                 <div className="min-w-0 flex-1">
                     <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">
-                        Admin Command Center
+                        Admin Command Center (V2)
                     </h2>
                     <p className="mt-1 text-sm text-gray-400">
                         System health, user activity, and signal performance.
@@ -118,7 +118,10 @@ export default async function AdminDashboard() {
                             <tr key={signal.id} className="hover:bg-gray-800/50">
                                 <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">
                                     <a
-                                        href={`https://polymarket.com/event/${signal.market_slug}`}
+                                        href={signal.market_slug
+                                            ? `https://polymarket.com/event/${signal.market_slug}`
+                                            : `https://polymarket.com/markets?q=${encodeURIComponent(signal.market_title)}`
+                                        }
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="hover:text-indigo-400 transition-colors flex items-center gap-2"
