@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import PureAIPredictionCard from '@/components/PureAIPredictionCard';
 import WhaleSignalCard from '@/components/WhaleSignalCard';
 
@@ -10,38 +9,39 @@ import WhaleSignalCard from '@/components/WhaleSignalCard';
 // or just inline it since it was inline before.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function DashboardClientView({ signals, predictions, whales }: { signals: any[], predictions: any[], whales: any[] }) {
-    const [filter, setFilter] = useState<'all' | 'news' | 'ai' | 'whales'>('all');
+export default function DashboardClientView({ signals, predictions, whales, initialFilter }: { signals: any[], predictions: any[], whales: any[], initialFilter: string }) {
+
+    const filter = initialFilter || 'all';
 
     return (
         <div>
             {/* Filter Toggle */}
             <div className="flex justify-center mb-10">
                 <div className="bg-gray-900 p-1 rounded-lg inline-flex ring-1 ring-white/10">
-                    <button
-                        onClick={() => setFilter('all')}
+                    <a
+                        href="/dashboard?view=all"
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'all' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                     >
                         All Signals
-                    </button>
-                    <button
-                        onClick={() => setFilter('news')}
+                    </a>
+                    <a
+                        href="/dashboard?view=news"
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'news' ? 'bg-indigo-900/50 text-indigo-400 shadow-sm' : 'text-gray-400 hover:text-white'}`}
                     >
                         📰 News Monitor
-                    </button>
-                    <button
-                        onClick={() => setFilter('ai')}
+                    </a>
+                    <a
+                        href="/dashboard?view=ai"
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'ai' ? 'bg-purple-900/50 text-purple-400 shadow-sm' : 'text-gray-400 hover:text-white'}`}
                     >
                         ✨ Pure AI
-                    </button>
-                    <button
-                        onClick={() => setFilter('whales')}
+                    </a>
+                    <a
+                        href="/dashboard?view=whales"
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'whales' ? 'bg-blue-900/50 text-blue-400 shadow-sm' : 'text-gray-400 hover:text-white'}`}
                     >
                         🐋 Whales
-                    </button>
+                    </a>
                 </div>
             </div>
 

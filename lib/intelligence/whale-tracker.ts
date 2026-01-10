@@ -187,11 +187,12 @@ export class WhaleTracker {
             if (rank <= 5 && pos.size > 1000) strength = 'high';
             else if (rank <= 20 || pos.size > 500) strength = 'medium';
 
+            // Ensure we save even small positions for visibility (MVP)
             const { error } = await supabase
                 .from('whale_signals')
                 .upsert({
                     trader_id: traderId,
-                    market_id: pos.marketSlug, // Using slug as ID proxy if real ID unavailable
+                    market_id: pos.marketSlug,
                     market_slug: pos.marketSlug,
                     market_question: pos.marketQuestion,
                     trader_action: pos.direction,
@@ -199,7 +200,7 @@ export class WhaleTracker {
                     average_buy_price: pos.price,
                     potential_payout: (pos.size / pos.price),
                     signal_strength: strength
-                }, { onConflict: 'market_id,trader_id' }); // Requires unique constraint in DB (which creates index usually, but explicit constraint needed)
+                }, { onConflict: 'market_id,trader_id' });
 
             if (error) {
                 // Ignore duplicate key errors if they come up, or log warn

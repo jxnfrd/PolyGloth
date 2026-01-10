@@ -3,8 +3,9 @@ import DashboardClientView from './DashboardClientView';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: { view?: string } }) {
     const supabase = await createClient();
+    const view = searchParams?.view || 'all';
 
     // Fetch News-Based Signals
     const { data: signals } = await supabase
@@ -40,6 +41,7 @@ export default async function Dashboard() {
                     signals={signals || []}
                     predictions={predictions || []}
                     whales={whales || []}
+                    initialFilter={view}
                 />
             </div>
         </div>
