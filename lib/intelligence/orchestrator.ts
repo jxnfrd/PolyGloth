@@ -112,11 +112,18 @@ export async function runScan(limit?: number): Promise<ScanResult> {
             // Rate Limit Protection: Wait 4 seconds to stay under 15 RPM (Free Tier)
             await new Promise(resolve => setTimeout(resolve, 4000));
 
+            // --- PHASE 3: FETCH FINANCIAL DATA ---
+            const { SourceRouter } = await import('./source-router');
+            const router = new SourceRouter();
+            const financialContext = await router.routeAndFetch(market.question, keywords);
+
+            await log('info', `Context Gathered: ${financialContext.fundamentals?.length || 0} stocks, ${financialContext.economics?.length || 0} macro indicators`);
+
             const analysis = await analyzeContradiction(market, {
                 title: article.title,
                 source: article.source || article.domain,
                 date: article.date
-            });
+            }, financialContext);
 
             if (!analysis) {
                 await log('warning', `AI Analysis failed for: ${market.question}`);
