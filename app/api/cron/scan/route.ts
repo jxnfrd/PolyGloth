@@ -12,7 +12,10 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const result = await runScan();
+        // Vercel Timeout Protection:
+        // Limit to 5 markets per run to ensure we finish within 10-15 seconds.
+        // The Orchestrator should randomize WHICH 5 it picks to ensure coverage over time.
+        const result = await runScan(5);
         return NextResponse.json({
             success: true,
             marketsScanned: result.marketsScanned,

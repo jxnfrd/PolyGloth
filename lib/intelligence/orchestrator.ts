@@ -31,8 +31,21 @@ export async function runScan(): Promise<ScanResult> {
 
     // 1. Fetch active markets
     // Increase limit for better testing of filtering
-    const markets = await fetchActiveMarkets(30);
+    const initialLimit = 30; // Define the initial limit for fetching
+    let markets = await fetchActiveMarkets(initialLimit); // Use 'let' because 'markets' will be reassigned
     await log('info', `Fetched ${markets.length} active markets`);
+
+    // Vercel Optimization:
+    // If scanning a small batch, randomize the order so we don't always check the same top markets.
+    if (initialLimit < 10) { // Use initialLimit here
+        markets.sort(() => Math.random() - 0.5);
+    }
+
+    // Take the slice AFTER shuffling (or before if we wanted top-liquidity only, but coverage is better)
+    markets = markets.slice(0, initialLimit); // Slice to the actual limit
+
+    console.log(`[INFO] Processing batch of ${markets.length} markets...`);
+    await log('info', `Starting scan cycle for ${markets.length} markets (Batch Mode)`);
 
     for (const market of markets) {
         try {
