@@ -1,4 +1,3 @@
-```typescript
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PolymarketMarket } from './polymarket';
 import { StandardizedContext } from './types/sources';
@@ -22,10 +21,10 @@ export async function analyzeContradiction(
         let contextString = "";
         if (financialContext) {
             if (financialContext.fundamentals?.length) {
-                contextString += "\nFUNDAMENTALS:\n" + financialContext.fundamentals.map(f => `- ${ f.symbol }: Price $${ f.latestPrice }, P / E ${ f.keyStats.peRatio } `).join("\n");
+                contextString += "\nFUNDAMENTALS:\n" + financialContext.fundamentals.map(f => `- ${f.symbol}: Price $${f.latestPrice}, P / E ${f.keyStats.peRatio} `).join("\n");
             }
             if (financialContext.economics?.length) {
-                contextString += "\nMACRO DATA:\n" + financialContext.economics.map(e => `- ${ e.title }: ${ e.latestValue } (${ e.date })`).join("\n");
+                contextString += "\nMACRO DATA:\n" + financialContext.economics.map(e => `- ${e.title}: ${e.latestValue} (${e.date})`).join("\n");
             }
             if (financialContext.newsSentiment?.length) {
                 contextString += "\nSENTIMENT:\n" + financialContext.newsSentiment.join("\n");
@@ -45,7 +44,7 @@ Source: "${evidence.source}"
 Date: "${evidence.date}"
         
         ADDITIONAL CONTEXT(Real - time Data):
-        ${ contextString || "No specific financial data fetched." }
+        ${contextString || "No specific financial data fetched."}
         
         ** Your Task:**
     Analyze if this news article contradicts the current market assumption.
@@ -88,10 +87,10 @@ Date: "${evidence.date}"
         } catch (e) {
             // Last resort: simple cleanup
             const simpleClean = text.replace(/```json / g, '').replace(/```/g, '').trim();
-return JSON.parse(simpleClean);
+            return JSON.parse(simpleClean);
         }
     } catch (error) {
-    console.error('AI Analysis failed:', error);
-    return null;
-}
+        console.error('AI Analysis failed:', error);
+        return null;
+    }
 }
