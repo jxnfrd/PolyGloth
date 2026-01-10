@@ -1,22 +1,17 @@
-import CryptoPricing from '@/components/ui/Pricing/CryptoPricing';
-import { createClient } from '@/utils/supabase/server';
-import {
-  getProducts,
-  getSubscription,
-  getUser
-} from '@/utils/supabase/queries';
+import Hero from '@/components/landing/Hero';
+import ProblemSection from '@/components/landing/ProblemSection';
+import SolutionGrid from '@/components/landing/SolutionGrid';
+import InteractivePreview from '@/components/landing/InteractivePreview';
+import FooterCTA from '@/components/landing/FooterCTA';
 
-export default async function PricingPage() {
-  const supabase = await createClient();
-  const [user, products, subscription] = await Promise.all([
-    getUser(supabase),
-    getProducts(supabase),
-    getSubscription(supabase)
-  ]);
-
+export default function Home() {
   return (
-    <CryptoPricing
-      user={user}
-    />
+    <main className="bg-gray-950 min-h-screen">
+      <Hero />
+      <ProblemSection />
+      <SolutionGrid />
+      <InteractivePreview />
+      <FooterCTA />
+    </main>
   );
 }
