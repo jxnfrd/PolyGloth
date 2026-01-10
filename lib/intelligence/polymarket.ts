@@ -3,9 +3,9 @@ import axios from 'axios';
 // Fallback to Gamma REST API as GraphQL endpoints are authenticated or removed
 const POLYMARKET_API_URL = 'https://gamma-api.polymarket.com/markets';
 
-export interface Market {
+export interface PolymarketMarket {
     id: string;
-    slug: string;
+    slug: string | null;
     question: string;
     description: string;
     outcomes: string;
@@ -16,7 +16,7 @@ export interface Market {
     endDate: string;
 }
 
-export async function fetchActiveMarkets(limit: number = 50): Promise<Market[]> {
+export async function fetchActiveMarkets(limit: number = 50): Promise<PolymarketMarket[]> {
     try {
         const response = await axios.get(POLYMARKET_API_URL, {
             params: {
