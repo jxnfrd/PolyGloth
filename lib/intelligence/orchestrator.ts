@@ -65,11 +65,23 @@ export async function runScan(): Promise<ScanResult> {
                 signalSource = 'NEWS_MEDIA'; // But distinct Tone Signal
                 await log('info', `Found NEGATIVE SPIKE (Tone ${strongestEvidence.tone}) for: ${market.question}`);
             }
+            // Priority 3: Standard News Fallback (Tier 3)
+            else {
+                // If strict filters failed, try standard news
+                const { fetchStandardNews } = await import('./gdelt-advanced');
+                const standardNews = await fetchStandardNews(keywords);
+
+                if (standardNews.length > 0) {
+                    strongestEvidence = standardNews[0];
+                    signalSource = 'STANDARD_NEWS';
+                    await log('info', `Found STANDARD NEWS for: ${market.question}`);
+                }
+            }
 
             if (!strongestEvidence) {
                 // No advanced signal found
                 // Enable this log to see "what was checked" even if no signal found
-                await log('info', `Checked: ${market.question.substring(0, 50)}... (No Gov/Crisis signal)`);
+                await log('info', `Checked: ${market.question.substring(0, 50)}... (No signal found in Gov/Crisis/Standard)`);
                 continue;
             }
 

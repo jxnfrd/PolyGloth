@@ -107,6 +107,17 @@ export async function fetchGovDocs(keywords: string[], countryCode: string): Pro
 }
 
 /**
+ * Fallback: Fetch Standard News (Tier 3)
+ * For markets that don't have Gov docs or Crisis spikes.
+ */
+export async function fetchStandardNews(keywords: string[]): Promise<GdeltAdvancedArticle[]> {
+    const keywordString = keywords.map(k => `"${k}"`).join(' OR ');
+    // Simple query, no domain/tone restriction
+    const query = `(${keywordString})`;
+    return queryGDELT(query, 'artlist', '24h');
+}
+
+/**
  * 4. Signal Spike Detector
  * Combines Tone + Gov Source for a specific market
  */
