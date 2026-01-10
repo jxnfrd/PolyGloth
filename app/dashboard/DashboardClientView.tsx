@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import PureAIPredictionCard from '@/components/PureAIPredictionCard';
+import WhaleSignalCard from '@/components/WhaleSignalCard';
 
 // Reuse existing card structure for standard signals or import if componentized
 // For now, I'll inline the logic or assume standard row
@@ -9,8 +10,8 @@ import PureAIPredictionCard from '@/components/PureAIPredictionCard';
 // or just inline it since it was inline before.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function DashboardClientView({ signals, predictions }: { signals: any[], predictions: any[] }) {
-    const [filter, setFilter] = useState<'all' | 'news' | 'ai'>('all');
+export default function DashboardClientView({ signals, predictions, whales }: { signals: any[], predictions: any[], whales: any[] }) {
+    const [filter, setFilter] = useState<'all' | 'news' | 'ai' | 'whales'>('all');
 
     return (
         <div>
@@ -34,6 +35,12 @@ export default function DashboardClientView({ signals, predictions }: { signals:
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'ai' ? 'bg-purple-900/50 text-purple-400 shadow-sm' : 'text-gray-400 hover:text-white'}`}
                     >
                         ✨ Pure AI
+                    </button>
+                    <button
+                        onClick={() => setFilter('whales')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'whales' ? 'bg-blue-900/50 text-blue-400 shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        🐋 Whales
                     </button>
                 </div>
             </div>
@@ -111,6 +118,11 @@ export default function DashboardClientView({ signals, predictions }: { signals:
                 {/* 2. Pure AI Predictions */}
                 {(filter === 'all' || filter === 'ai') && predictions.map((pred) => (
                     <PureAIPredictionCard key={pred.id} prediction={pred} />
+                ))}
+
+                {/* 3. Whale Signals */}
+                {(filter === 'all' || filter === 'whales') && whales?.map((signal) => (
+                    <WhaleSignalCard key={signal.id} signal={signal} />
                 ))}
 
                 {/* Empty State */}

@@ -19,15 +19,27 @@ export default async function Dashboard() {
         .select('*')
         .order('analysis_timestamp', { ascending: false });
 
+    // Fetch Whale Signals with Trader Info
+    const { data: whales } = await supabase
+        .from('whale_signals')
+        .select(`
+            *,
+            tracked_traders (
+                leaderboard_rank
+            )
+        `)
+        .order('discovered_at', { ascending: false });
+
     return (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
             <h1 className="text-3xl font-bold leading-tight tracking-tight text-white">PolyGlot Intelligence Dashboard</h1>
-            <p className="mt-2 text-sm text-gray-400">Real-time market intelligence: News Arbitrage & Pure AI Reasoning.</p>
+            <p className="mt-2 text-sm text-gray-400">Real-time market intelligence: News Arbitrage, Pure AI, & Whale Tracking.</p>
 
             <div className="mt-8">
                 <DashboardClientView
                     signals={signals || []}
                     predictions={predictions || []}
+                    whales={whales || []}
                 />
             </div>
         </div>
