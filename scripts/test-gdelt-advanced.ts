@@ -17,7 +17,7 @@ async function test() {
 
     // 3. Test Gov Docs: Brazil
     console.log('\n[3] Fetching GOV docs from Brazil (.gov.br)...');
-    const brazils = await fetchGovDocs('br');
+    const brazils = await fetchGovDocs(['lei', 'decreto'], 'br');
     console.log(`Found ${brazils.length} gov docs`);
     brazils.slice(0, 3).forEach(r => console.log(` - ${r.title} (${r.url})`));
 }
