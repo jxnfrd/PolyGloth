@@ -1,6 +1,7 @@
 import { recentSignals } from '@/lib/ui/queries';
 import { openDb, all } from '@/lib/pm/db';
-import { Table, H, MarketLink, fmtUsd, fmtCents, ago, Empty, Pill, fmtPct, fmtTs } from '@/components/intel/ui';
+import { Table, H, MarketLink, fmtUsd, fmtCents, ago, Empty, Pill, fmtPct, fmtTs, Sentence, Term } from '@/components/intel/ui';
+import { describeSignal } from '@/lib/ui/explain';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -25,16 +26,16 @@ export default function Flow() {
     const drift = driftCandidates();
     return (
         <div>
-            <H sub="≥8¢ move in 60 min on < 2% of 24h volume: candidates for a fade of half the move">Thin moves</H>
-            {thin.length === 0 ? <Empty>No thin-move signals stored. Run <code>npx tsx scripts/pm-flow.ts top 8</code>. Needs market-level trades (pm-insider scan ingests them).</Empty> :
-            <Table head={['when', 'market', 'move', 'window vol', '24h vol', 'fade side', 'score']}
-                rows={thin.map(r => [ago(r.ts), <MarketLink key="m" conditionId={r.condition_id} question={r.question} />, `${Number(p(r).moveCents) > 0 ? '+' : ''}${Number(p(r).moveCents).toFixed(0)}¢`, fmtUsd(p(r).windowUsd ?? p(r).volumeUsd), fmtUsd(p(r).volume24hr), <Pill key="s" tone={p(r).fadeSide === 'YES' ? 'emerald' : 'rose'}>{String(p(r).fadeSide)}</Pill>, r.score])} />}
-            <H sub="large resting levels that vanished between two snapshots without trading">Spoof suspects</H>
-            <Table head={['when', 'market', 'side', 'price', 'size', 'vs median level']}
-                rows={spoof.map(r => [ago(r.ts), <MarketLink key="m" conditionId={r.condition_id} question={r.question} />, String(p(r).side), fmtCents(p(r).price), fmtUsd(p(r).size), `${(Number(p(r).size) / Math.max(1, Number(p(r).medianLevelSize))).toFixed(0)}×`])}
-                empty="No spoof signals. Needs paired book snapshots (scripts/pm-daemon.ts books job)." />
-            <H sub="non-sports near-certain markets ending in 6h–14d: gross yield of holding the likely side to $1, annualized (days floored at 1). A fat yield usually means the market is NOT certain: check /intel/resolution first.">Resolution drift (last-cents yield)</H>
-            <Table head={['market', 'cat', 'side', 'bid/ask', 'gross yield', 'days left', 'annualized', '24h vol', 'liquidity', 'ends']}
+            <H sub="price jumped 8¢ or more in an hour on under 2% of the day's volume; such moves often snap back">Thin moves</H>
+            {thin.length === 0 ? <Empty>No thin moves in the markets scanned. This check runs on the 20 most active markets each cycle.</Empty> :
+            <Table head={['when', 'what happened', 'market']}
+                rows={thin.map(r => [ago(r.ts), <Sentence key="s">{describeSignal(r as never)}</Sentence>, <MarketLink key="m" conditionId={r.condition_id} question="open" />])} />}
+            <H sub="a large resting order appeared and vanished without trading">Vanishing walls</H>
+            <Table head={['when', 'what happened', 'market']}
+                rows={spoof.map(r => [ago(r.ts), <Sentence key="s">{describeSignal(r as never)}</Sentence>, <MarketLink key="m" conditionId={r.condition_id} question="open" />])}
+                empty="None detected. This needs hourly order-book snapshots, which the scheduler collects once it runs." />
+            <H sub="markets priced 93¢+ or 7¢- that end within two weeks, and what holding the likely side to $1 would earn. A fat yield usually means the market is not as certain as it looks: check its rules first.">Last cents</H>
+            <Table head={['market', 'category', 'likely side', 'bid/ask', <Term key="y" k="last-cents yield">yield to $1</Term>, 'days left', 'annualised', '24h volume', 'liquidity', 'ends']}
                 rows={drift.map(m => { const y = Number(m.gross_yield), d = Math.max(1, Number(m.days_left)); return [<MarketLink key="m" conditionId={m.condition_id} question={m.question} slug={m.event_slug} />, String(m.category), <Pill key="s" tone={m.side === 'YES' ? 'emerald' : 'rose'}>{String(m.side)}</Pill>, `${fmtCents(m.best_bid)}/${fmtCents(m.best_ask)}`, fmtPct(y, 2), d.toFixed(1), fmtPct(y * 365 / d, 0), fmtUsd(m.volume24hr), fmtUsd(m.liquidity), fmtTs(m.end_ts).slice(0, 10)]; })}
                 empty="No near-certain markets with a live two-sided book in the store." />
         </div>

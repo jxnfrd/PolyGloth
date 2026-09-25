@@ -168,11 +168,15 @@ export async function ingestResolutions(limit = 500, recheckAfterSec = 6 * 3600,
     openDb();
     const t = now();
     // Markets that ingested wallets actually traded come first: those are the ones scoring needs.
+    // Only markets someone in the store traded, or that hold a signal/paper order: the other ~400k event siblings never matter for scoring.
     const rows = all<{ condition_id: string }>(
         `SELECT m.condition_id FROM markets m
           WHERE m.resolved = 0 AND (m.closed = 1 OR (m.end_ts IS NOT NULL AND m.end_ts < ?))
             AND (m.resolution_checked_at IS NULL OR m.resolution_checked_at < ?)
-          ORDER BY CASE WHEN EXISTS (SELECT 1 FROM trades t WHERE t.condition_id = m.condition_id) THEN 0 ELSE 1 END, m.end_ts DESC LIMIT ?`, t, t - recheckAfterSec, limit);
+            AND (EXISTS (SELECT 1 FROM trades t WHERE t.condition_id = m.condition_id)
+                 OR EXISTS (SELECT 1 FROM signals s WHERE s.condition_id = m.condition_id)
+                 OR EXISTS (SELECT 1 FROM paper_orders p WHERE p.condition_id = m.condition_id))
+          ORDER BY m.end_ts DESC LIMIT ?`, t, t - recheckAfterSec, limit);
     let resolved = 0;
     for (const r of rows) {
         const m = await clobMarket(r.condition_id, 0);

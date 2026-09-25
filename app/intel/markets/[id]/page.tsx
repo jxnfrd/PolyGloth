@@ -1,5 +1,6 @@
 import { marketDetail } from '@/lib/ui/queries';
-import { Stat, Table, H, Pill, WalletLink, MarketLink, fmtUsd, fmtCents, fmtTs, ago, Empty, fmtPct } from '@/components/intel/ui';
+import { Stat, Table, H, Pill, WalletLink, MarketLink, fmtUsd, fmtCents, fmtTs, ago, Empty, fmtPct, SignalType, Sentence, Term } from '@/components/intel/ui';
+import { describeSignal } from '@/lib/ui/explain';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,23 +23,23 @@ export default function MarketPage({ params }: { params: { id: string } }) {
                 <Stat label="24h volume" value={fmtUsd(m.volume24hr)} sub={`total ${fmtUsd(m.volume)}`} />
                 <Stat label="Liquidity" value={fmtUsd(m.liquidity)} sub={book ? `book ${ago(book.ts)} ago` : 'no book snapshot'} />
                 <Stat label="Ends" value={fmtTs(m.end_ts).slice(0, 10)} sub={m.resolved ? `resolved → ${outcomes[Number(m.winner_index)] ?? m.winner_index}` : m.closed ? 'closed' : 'open'} />
-                <Stat label={`24h taker flow · ${outcomes[0]}`} value={fmtPct(imb(0), 0)} tone={imb(0) > 0.2 ? 'pos' : imb(0) < -0.2 ? 'neg' : 'muted'} sub={`buy ${fmtUsd(buy(0))} · sell ${fmtUsd(sell(0))}`} />
+                <Stat label={<Term k="taker flow">{`24h taker flow · ${outcomes[0]}`}</Term> as unknown as string} value={fmtPct(imb(0), 0)} tone={imb(0) > 0.2 ? 'pos' : imb(0) < -0.2 ? 'neg' : 'muted'} sub={`buy ${fmtUsd(buy(0))} · sell ${fmtUsd(sell(0))}`} />
                 <Stat label="Price path (stored)" value={prices.length ? `${fmtCents(first)} → ${fmtCents(last)}` : '—'} sub={prices.length ? `${prices.length} pts` : 'no price history ingested'} />
             </div>
             {book && (
                 <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-                    <Stat label="Depth ≤1¢ (bid / ask)" value={`${fmtUsd(book.depth_bid_1c)} / ${fmtUsd(book.depth_ask_1c)}`} />
+                    <Stat label={<Term k="depth">Depth within 1¢ (bid / ask)</Term> as unknown as string} value={`${fmtUsd(book.depth_bid_1c)} / ${fmtUsd(book.depth_ask_1c)}`} />
                     <Stat label="Depth ≤5¢ (bid / ask)" value={`${fmtUsd(book.depth_bid_5c)} / ${fmtUsd(book.depth_ask_5c)}`} />
                     <Stat label="Spread" value={book.spread == null ? '—' : Math.round(Number(book.spread) * 100) + '¢'} sub={`mid ${fmtCents(book.mid)}`} />
                 </div>
             )}
             {siblings.length > 1 && (<><H sub={event?.neg_risk ? 'neg-risk event: outcomes are mutually exclusive' : undefined}>Same event ({siblings.length} markets{event?.neg_risk ? `, YES sum ${fmtPct(siblings.reduce((s, x) => s + Number(x.best_ask ?? x.yes_price ?? 0), 0), 1)}` : ''})</H>
                 <Table head={['market', 'yes', 'ask', '24h vol', 'state']} rows={siblings.map(s => [<MarketLink key="m" conditionId={s.condition_id} question={s.question} />, fmtCents(s.yes_price), fmtCents(s.best_ask), fmtUsd(s.volume24hr), s.resolved ? `→ ${String(s.winner_index)}` : ''])} /></>)}
-            <H sub="net from ingested trades; scores from wallet_scores when present">Largest holders (ingested wallets)</H>
+            <H sub="net position built from the trades we have stored; only wallets with history appear">Largest holders we know about</H>
             <Table head={['wallet', 'side', 'net shares', 'net usd', 'calib ROI', 'resolved', 'p']}
                 rows={holders.map(h => [<WalletLink key="w" address={h.wallet} name={h.username} />, String(outcomes[Number(h.outcome_index)] ?? h.outcome_index), Number(h.net_shares).toFixed(0), fmtUsd(h.net_usdc), h.calibrated_roi == null ? '—' : fmtPct(h.calibrated_roi), h.n_resolved ?? '—', h.p_value == null ? '—' : Number(h.p_value).toFixed(3)])} />
             <H>Signals</H>
-            <Table head={['when', 'type', 'score', 'wallet', 'detail', 'outcome']} rows={signals.map(s => [ago(s.ts), <Pill key="t" tone="sky">{String(s.type)}</Pill>, s.score == null ? '—' : Number(s.score).toFixed(0), s.wallet ? <WalletLink key="w" address={s.wallet} /> : '—', <span key="d" className="text-zinc-400">{JSON.stringify(s.payload).slice(0, 100)}</span>, s.outcome ? <Pill key="o" tone={s.outcome === 'WIN' ? 'emerald' : 'rose'}>{String(s.outcome)}</Pill> : '—'])} />
+            <Table head={['when', 'type', 'what happened', 'wallet', 'outcome']} rows={signals.map(s => [ago(s.ts), <SignalType key="t" type={s.type} />, <Sentence key="d">{describeSignal({ ...s, question: m.question } as never)}</Sentence>, s.wallet ? <WalletLink key="w" address={s.wallet} /> : '—', s.outcome ? <Pill key="o" tone={s.outcome === 'WIN' ? 'emerald' : 'rose'}>{String(s.outcome)}</Pill> : 'pending'])} />
             {comments.length > 0 && (<><H sub={`event ${event?.id}`}>Comments (stored)</H>
                 <div className="space-y-2">{comments.map(c => <div key={String(c.id)} className="rounded border border-zinc-800 px-3 py-2 text-sm"><div className="mb-1 text-xs text-zinc-500">{ago(c.created_ts)} ago · <WalletLink address={c.proxy_wallet} name={c.name} /> · {String(c.reaction_count)} reactions</div><div className="text-zinc-200">{String(c.body)}</div></div>)}</div></>)}
             <H sub="newest 300 from ingested wallets">Trade tape</H>

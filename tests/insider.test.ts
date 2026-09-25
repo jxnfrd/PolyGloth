@@ -25,7 +25,7 @@ test('detector: fresh+big, niche, sniper cluster, one-and-done, improbable recor
         row('0xnoise', 0, 50, T0 + 5000),            // nothing
         row('0xsell', 0, 9000, T0 + 6000, 0.5, 'SELL') // sells ignored
     ];
-    const ages: Record<string, WalletAge> = { '0xfresh': age(T0 + 100 - 7200, 12), '0xold': age(T0 - 400 * 86_400, 900, false), '0xone': age(T0 + 3000, 1), '0xa': age(T0 - 86_400 * 30, 50), '0xb': age(T0 - 86_400 * 30, 50), '0xc': age(T0 - 86_400 * 30, 50) };
+    const ages: Record<string, WalletAge> = { '0xfresh': age(T0 + 100 - 7200, 12), '0xold': age(T0 - 400 * 86_400, 900, false), '0xone': age(T0 + 3000, 1), '0xa': age(T0 - 86_400 * 3, 50), '0xb': age(T0 - 86_400 * 2, 50), '0xc': age(T0 - 86_400 * 30, 50) }; // two young members make the cluster count
     const scores = { '0xsharp': { p_value: 0.01, n_resolved: 40 }, '0xa': { p_value: 0.5, n_resolved: 40 } };
     const flags = detectInMarket(tape, mkt, ages, scores);
     const by: Record<string, typeof flags[0]> = {}; for (const f of flags) by[f.wallet] = f;
@@ -43,6 +43,10 @@ test('detector: fresh+big, niche, sniper cluster, one-and-done, improbable recor
     // near-certainty buys are never flagged; incomplete history gives unknown age (null), never negative
     const nc = detectInMarket([row('0xq', 0, 5000, T0 + 100, 0.998), row('0xr', 0, 600, T0 + 150, 0.998), row('0xs', 0, 600, T0 + 200, 0.998), row('0xbig', 0, 5000, T0 + 300, 0.5)], mkt, { '0xq': age(T0, 1), '0xbig': age(T0 + 1000, 500, false) }, {});
     assert.equal(nc.length, 1); assert.equal(nc[0].wallet, '0xbig'); assert.deepEqual(nc[0].reasons, ['niche']); assert.equal(nc[0].wallet_age_h, null);
+    // 2026-09-25: three OLD wallets buying the same side of a $350k/day market inside 10 minutes is ordinary trading, not a sniper cluster
+    const busy = { condition_id: '0xfed', question: 'Fed', volume24hr: 350_000 };
+    const oldAges = { '0xa': age(T0 - 86_400 * 30, 50), '0xb': age(T0 - 86_400 * 40, 50), '0xc': age(T0 - 86_400 * 50, 50) };
+    assert.equal(detectInMarket([row('0xa', 1, 600, T0 + 1000), row('0xb', 1, 700, T0 + 1200), row('0xc', 1, 800, T0 + 1500)], busy, oldAges, {}).length, 0);
 });
 
 test('persist, ledger, price impact', () => {

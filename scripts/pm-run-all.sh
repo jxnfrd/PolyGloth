@@ -10,6 +10,7 @@ step snapshots;    npx tsx -e "import('./lib/pm/ingest').then(async m => { const
 step score;        npx tsx scripts/pm-score.ts all
 step score-top;    npx tsx scripts/pm-score.ts top
 step fade;         npx tsx scripts/pm-fade.ts all
+step walkforward;  npx tsx scripts/backtest-walkforward.ts 7 30 50 && npx tsx scripts/backtest-walkforward.ts 14 30 50
 step insider;      npx tsx scripts/pm-insider.ts scan 20 3
 step arb;          npx tsx scripts/pm-arb.ts --no-kalshi-fetch
 step flow;         npx tsx scripts/pm-flow.ts top 8

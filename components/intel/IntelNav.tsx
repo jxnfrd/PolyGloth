@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { PAGE_HELP } from '@/lib/ui/explain';
+import { Help } from '@/components/intel/ui';
 
 export const INTEL_NAV: [string, string, string][] = [
     ['/intel', 'Overview', 'Store health, signal ledger and the latest signals'],
@@ -16,12 +18,15 @@ export const INTEL_NAV: [string, string, string][] = [
     ['/intel/journal', 'Journal', 'Auto-tagged journal, which reasons pay, attribution, portfolio, tax export'],
     ['/intel/alerts', 'Alerts', 'Composable alert rules and what fired'],
     ['/intel/report', 'Edge report', 'This week vs last: what worked, what decayed'],
+    ['/intel/backtest', 'Backtest', 'Walk-forward test of the wallet-scoring thesis and the paper strategies, no lookahead'],
     ['/intel/kalshi', 'Kalshi', 'Open Kalshi markets from the public API']
 ];
 
 export default function IntelNav() {
     const path = usePathname() || '/intel';
     const active = INTEL_NAV.find(([h]) => h !== '/intel' && path.startsWith(h)) ?? INTEL_NAV[0];
+    const key = active[0] === '/intel' ? 'overview' : active[0].replace('/intel/', '');
+    const help = PAGE_HELP[key];
     return (
         <div className="mb-6 border-b border-zinc-800 pb-3">
             <div className="flex flex-wrap items-center gap-1">
@@ -31,7 +36,8 @@ export default function IntelNav() {
                 ))}
             </div>
             <h1 className="mt-4 text-xl font-semibold text-white">{active[1]}</h1>
-            <p className="mt-1 text-sm text-zinc-500">{active[2]}</p>
+            <p className="mb-4 mt-1 text-sm text-zinc-500">{active[2]}</p>
+            {help && <Help what={help.what} read={help.read} act={help.act} />}
         </div>
     );
 }

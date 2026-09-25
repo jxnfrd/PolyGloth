@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import React, { isValidElement } from 'react';
+import { GLOSSARY, SIGNAL_LABEL, SIGNAL_MEANING } from '@/lib/ui/explain';
 
 /** Render any cell value: React elements pass through, null/undefined become a dash, everything else is stringified. */
 export function cell(v: unknown): React.ReactNode {
@@ -88,4 +89,32 @@ export function Filters({ current, options, param, base }: { current: string; op
             ))}
         </div>
     );
+}
+
+/** A technical term with its plain-English definition on hover (and in a title attribute for touch). */
+export function Term({ k, children }: { k: string; children?: React.ReactNode }) {
+    const def = GLOSSARY[k];
+    return <abbr title={def ?? k} className="cursor-help border-b border-dotted border-zinc-600 no-underline">{children ?? k}</abbr>;
+}
+
+/** Signal type as a human label with its meaning on hover. */
+export function SignalType({ type }: { type: unknown }) {
+    const t = String(type ?? '');
+    return <abbr title={SIGNAL_MEANING[t] ?? t} className="inline-block cursor-help rounded bg-sky-500/15 px-1.5 py-0.5 text-[11px] font-medium text-sky-200 no-underline">{SIGNAL_LABEL[t] ?? t}</abbr>;
+}
+
+/** Plain-language help box: what the page is, how to read it, what to do. */
+export function Help({ what, read, act }: { what: string; read: string[]; act: string }) {
+    return (
+        <div className="mb-6 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-sm md:grid-cols-3">
+            <div><div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-500">What this is</div><p className="text-zinc-200">{what}</p></div>
+            <div><div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-500">How to read it</div><ul className="list-disc space-y-1 pl-4 text-zinc-300">{read.map((r, i) => <li key={i}>{r}</li>)}</ul></div>
+            <div><div className="mb-1 text-[11px] uppercase tracking-wider text-zinc-500">What to do</div><p className="text-zinc-200">{act}</p></div>
+        </div>
+    );
+}
+
+/** A wrapped sentence cell (tables default to nowrap). */
+export function Sentence({ children }: { children: React.ReactNode }) {
+    return <span className="block max-w-xl whitespace-normal font-sans text-[13px] leading-5 text-zinc-200">{children}</span>;
 }

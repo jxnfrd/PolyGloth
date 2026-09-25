@@ -1,6 +1,7 @@
 import { recentSignals } from '@/lib/ui/queries';
 import { openDb, all } from '@/lib/pm/db';
-import { Table, H, MarketLink, ago, Empty, Pill, fmtCents, fmtUsd, fmtTs } from '@/components/intel/ui';
+import { Table, H, MarketLink, ago, Empty, Pill, fmtCents, fmtUsd, fmtTs, Sentence, Term } from '@/components/intel/ui';
+import { describeSignal } from '@/lib/ui/explain';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,18 +25,18 @@ export default function Resolution() {
     const amb = ambiguousRules();
     return (
         <div>
-            <H sub="CLOB reports a winner (or UMA has a proposal) but the price is still between 2¢ and 98¢">Early resolution gaps</H>
+            <H sub="the exchange already knows the winner, but the price has not gone to $1 or $0">Decided but not priced</H>
             {early.length === 0 ? <Empty>No early-resolution signals. Run <code>npx tsx scripts/pm-resolution.ts</code>.</Empty> :
-            <Table head={['when', 'market', 'winner', 'price', 'gap', 'source', 'UMA', 'dispute risk']}
-                rows={early.map(r => [ago(r.ts), <MarketLink key="m" conditionId={r.condition_id} question={p(r).question} />, String(r.outcome_index), fmtCents(p(r).yes_price), `${p(r).gapCents}¢`, String(p(r).source ?? ''), String(p(r).uma ?? ''), String(p(r).disputeRisk ?? '')])} />}
-            <H sub="description hash changed between ingests: prices often lag a clarification">Rules changed</H>
+            <Table head={['when', 'what happened', 'market']}
+                rows={early.map(r => [ago(r.ts), <Sentence key="s">{describeSignal(r as never)}</Sentence>, <MarketLink key="m" conditionId={r.condition_id} question="open" />])} />}
+            <H sub="Polymarket edited the resolution text; prices usually lag a clarification">Rules edited</H>
             <Table head={['when', 'market', 'before', 'after']}
                 rows={rules.map(r => [ago(r.ts), <MarketLink key="m" conditionId={r.condition_id} question={p(r).question} />, <span key="b" className="whitespace-normal text-zinc-500">{String(p(r).before).slice(0, 160)}</span>, <span key="a" className="whitespace-normal text-zinc-200">{String(p(r).after).slice(0, 160)}</span>])}
                 empty="No rule changes detected since ingestion started." />
             <H sub="resolution-source URLs whose content hash changed (scripts/pm-resolution.ts --sources)">Source changes</H>
             <Table head={['when', 'market', 'url']} rows={src.map(r => [ago(r.ts), <MarketLink key="m" conditionId={r.condition_id} />, <a key="u" className="text-sky-300 hover:underline" href={String(p(r).url)} target="_blank" rel="noreferrer">{String(p(r).url).slice(0, 80)}</a>])} />
-            <H sub="heuristic on rule text: 'sole discretion', 'credible reporting', missing source, 50/50 clauses, UMA disputes. Full scorer in lib/market/resolution.ts">Dispute-prone open markets (non-sports, over $10k per 24h)</H>
-            <Table head={['market', 'cat', 'yes', '24h vol', 'ends', 'source', 'risk']}
+            <H sub="how vague the rules are: no named source, 'credible reporting', discretion clauses, 50/50 outs, open disputes. Higher = more likely to resolve against the headline">Markets with vague rules (non-sports, active)</H>
+            <Table head={['market', 'category', 'yes price', '24h volume', 'ends', 'named source', <Term key="r" k="dispute risk" />]}
                 rows={amb.map(m => [<MarketLink key="m" conditionId={m.condition_id} question={m.question} slug={m.event_slug} />, String(m.category), fmtCents(m.yes_price), fmtUsd(m.volume24hr), fmtTs(m.end_ts).slice(0, 10), String(m.resolution_source || '—').slice(0, 40), <Pill key="r" tone={Number(m.risk) >= 50 ? 'rose' : Number(m.risk) >= 25 ? 'amber' : 'zinc'}>{String(m.risk)}</Pill>])} />
         </div>
     );

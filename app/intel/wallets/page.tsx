@@ -1,5 +1,5 @@
 import { topWallets, scoreCategories } from '@/lib/ui/queries';
-import { Table, H, WalletLink, fmtUsd, fmtPct, Signed, Empty, fmtDec } from '@/components/intel/ui';
+import { Table, H, WalletLink, fmtUsd, fmtPct, Signed, Empty, fmtDec, Term } from '@/components/intel/ui';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,9 +19,10 @@ export default function Wallets({ searchParams }: { searchParams: { cat?: string
                 <div className="flex flex-wrap gap-1">{[['best', 'sharpest'], ['worst', 'fade list']].map(([v, l]) => <a key={v} href={q({ order: v })} className={`rounded px-2 py-1 font-mono text-[12px] ${order === v ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>{l}</a>)}</div>
                 <div className="flex flex-wrap gap-1">{[10, 30, 100].map(v => <a key={v} href={q({ min: v })} className={`rounded px-2 py-1 font-mono text-[12px] ${minResolved === v ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>≥{v} resolved</a>)}</div>
             </div>
-            <H sub="calibrated ROI = P/L per unit of odds-adjusted risk; p = one-sided probability the record is luck">{order === 'best' ? 'Sharpest wallets' : 'Anti-leaderboard (fade candidates)'} · {cat} · {win ? `${win}d` : 'all time'}</H>
+            <div className="mt-3 rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">Descriptive, not a trading signal: the walk-forward test on <a className="underline" href="/intel/backtest">/intel/backtest</a> shows this ranking did not predict out-of-sample copy returns at the current sample size.</div>
+            <H sub="hover any column name for its definition">{order === 'best' ? 'Sharpest wallets' : 'Anti-leaderboard (fade candidates)'} · {cat} · {win ? `${win}d` : 'all time'}</H>
             {rows.length === 0 ? <Empty>No scores for this filter yet. Run <code>npx tsx scripts/pm-score.ts</code> after the ingest finishes.</Empty> :
-            <Table head={['wallet', 'LB rank', 'resolved', 'win %', 'staked', 'P/L', 'ROI', 'calibrated ROI', 'p-value', 'Brier', 'avg entry', 'longshots', 'timing (pp)']}
+            <Table head={['wallet', <Term key="a" k="LB rank" />, <Term key="b" k="resolved" />, <Term key="c" k="win %" />, <Term key="d" k="staked" />, 'P/L', <Term key="e" k="ROI" />, <Term key="f" k="calibrated ROI" />, <Term key="g" k="p-value" />, <Term key="h" k="Brier" />, <Term key="i" k="avg entry" />, <Term key="j" k="longshots" />, <Term key="k" k="timing (pp)" />]}
                 rows={rows.map(r => [
                     <WalletLink key="w" address={r.wallet} name={r.username} />, r.lb_rank_pnl_month ?? '—', r.n_resolved, r.n_resolved ? fmtPct(Number(r.wins) / Number(r.n_resolved), 0) : '—',
                     fmtUsd(r.staked), <Signed key="p" n={r.pnl} />, <Signed key="r" n={r.roi} fmt={v => fmtPct(v)} />, <Signed key="c" n={r.calibrated_roi} fmt={v => fmtPct(v)} />,

@@ -61,7 +61,16 @@ export function detectInMarket(tape: TapeRow[], market: { condition_id: string; 
             const seen: Record<string, true> = {}; let j = i;
             while (j < arr.length && arr[j].ts - arr[i].ts <= cWin) { seen[arr[j].wallet] = true; j++; }
             const nW = Object.keys(seen).length;
-            if (nW >= cN) for (let q = i; q < j; q++) clusterOf[arr[q].id] = Math.max(clusterOf[arr[q].id] || 0, nW);
+            if (nW < cN) continue;
+            // 2026-09-25 audit: 119 of 134 flags were "snipers" on $350k/day Fed markets, where 3 wallets buying the same
+            // side inside 10 minutes is ordinary trading. A cluster only counts when it is material for the market
+            // (≥ 2 % of 24h volume, or the market is thin) AND at least two members are young wallets (≤ 7 days, complete history).
+            const members = arr.slice(i, j);
+            const clusterUsd = members.reduce((acc, t) => acc + t.usdc, 0);
+            const material = vol === 0 || vol < 100_000 || clusterUsd >= 0.02 * vol;
+            const young = Object.keys(seen).filter(w => { const a = ages[w]; return a && a.complete && a.firstTs && (arr[i].ts - a.firstTs) / 86400 <= 7; }).length;
+            if (!material || young < 2) continue;
+            for (let q = i; q < j; q++) clusterOf[arr[q].id] = Math.max(clusterOf[arr[q].id] || 0, nW);
         }
     }
     const flags: Flag[] = [];
