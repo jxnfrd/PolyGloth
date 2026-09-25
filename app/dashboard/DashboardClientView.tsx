@@ -92,14 +92,14 @@ export default function DashboardClientView({ signals, predictions, whales, init
                                     {signal.evidence_type === 'OFFICIAL_DOCUMENT' ? '🏛️ OFFICIAL GOV' : '📰 NEWS MEDIA'}
                                 </span>
                                 <span className="inline-flex items-center rounded-full bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
-                                    Score: {signal.contradiction_score}/100
+                                    Score: {signal.contradiction_score}/100{signal.market_yes_price != null && signal.ai_probability != null ? ` · market ${Math.round(signal.market_yes_price * 100)}% vs AI ${signal.ai_probability}% ${signal.direction || ''}` : ''}
                                 </span>
                             </div>
 
                             <div className="mt-6 border-t border-gray-800 pt-6 flex justify-between items-center">
                                 <div className="text-xs text-gray-500 max-w-[50%] truncate">
                                     Src: <a href={signal.article_url} target="_blank" className="hover:text-indigo-400 underline decoration-gray-700 underline-offset-2">
-                                        {new URL(signal.article_url).hostname.replace('www.', '')}
+                                        {(() => { try { return new URL(signal.article_url).hostname.replace('www.', ''); } catch { return signal.source_outlet || 'source'; } })()}
                                     </a>
                                 </div>
 

@@ -26,9 +26,7 @@ async function runPureAIScan(limit = 10) {
     console.log(`🤖 Starting Pure AI Analysis Scan (Limit: ${limit})...`);
 
     // 1. Fetch Markets
-    let markets = await fetchActiveMarkets(30);
-    // Filter for reasonably high liquidity to be worth analyzing
-    markets = markets.filter(m => Number(m.liquidity) > 5000);
+    let markets = await fetchActiveMarkets(30, { excludeSports: true });
 
     // Shuffle and slice
     markets.sort(() => Math.random() - 0.5);
@@ -55,7 +53,7 @@ async function runPureAIScan(limit = 10) {
 
         // 3. AI Analysis
         // Rate limit: 4s delay
-        await new Promise(r => setTimeout(r, 4000));
+        await new Promise(r => setTimeout(r, 1000));
 
         const prediction = await generatePureAIPrediction(market);
 
@@ -64,7 +62,19 @@ async function runPureAIScan(limit = 10) {
             console.log(`      "${prediction.summary}"`);
 
             // 4. Save to DB
-            const { error } = await supabase.from('pure_ai_predictions').insert(prediction);
+            // Column names differ from the in-memory shape; the old direct insert failed silently on every row (0 rows in prod).
+            const { error } = await supabase.from('pure_ai_predictions').upsert({
+                market_id: prediction.market_id,
+                market_slug: prediction.market_slug,
+                market_question: prediction.market_question,
+                market_yes_price: prediction.market_yes_price,
+                prediction_summary: prediction.summary,
+                reasoning: prediction.reasoning,
+                estimated_probability: prediction.estimatedProbability,
+                confidence_level: prediction.confidence_level,
+                ai_model_used: prediction.ai_model_used,
+                analysis_timestamp: new Date().toISOString()
+            }, { onConflict: 'market_id' });
             if (error) {
                 console.error("   ❌ DB Error:", error.message);
             } else {

@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -19,7 +19,10 @@
     "supabase:generate-migration": "npx supabase db diff | npx supabase migration new",
     "supabase:generate-seed": "npx supabase db dump --data-only -f supabase/seed.sql",
     "supabase:push": "npx supabase db push",
-    "supabase:pull": "npx supabase db pull"
+    "supabase:pull": "npx supabase db pull",
+    "test": "tsx --test tests/*.test.ts",
+    "test:pm": "tsx --test tests/pm.test.ts",
+    "dev:turbo": "next dev --turbo"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "polygloth": {
+      "command": "npx",
+      "args": ["tsx", "scripts/pm-mcp.ts"],
+      "cwd": "/ABSOLUTE/PATH/TO/PolyGloth",
+      "env": { "POLYGLOTH_DB": "/ABSOLUTE/PATH/TO/PolyGloth/data/polygloth.sqlite" }
+    }
+  }
+}

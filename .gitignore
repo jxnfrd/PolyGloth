@@ -40,3 +40,9 @@ yarn-error.log*
 # certificates
 certificates
 .env*.local
+
+# local analytics store
+data/
+qa/shots/
+qa/node_modules/
+qa/package*.json

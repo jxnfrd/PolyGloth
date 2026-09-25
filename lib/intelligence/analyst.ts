@@ -1,97 +1,103 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PolymarketMarket } from './polymarket';
 import { StandardizedContext } from './types/sources';
+import { askJson } from './llm';
 
-// Assuming AnalysisResult is defined elsewhere or will be defined.
-// For the purpose of this edit, we'll use 'any' if AnalysisResult is not provided.
-type AnalysisResult = any;
+/**
+ * Contradiction analyst.
+ *
+ * Audit 2026-09-25: the old prompt never told the model what the market currently
+ * prices, so "contradiction" was unmeasurable. The model now sees the live YES price
+ * and must return its own probability + direction; the orchestrator computes the edge.
+ */
+export interface AnalysisResult {
+    keyFinding: string;
+    evidenceType: 'official_document' | 'direct_quote' | 'expert_analysis' | 'rumor';
+    /** 0-100: how strongly the evidence moves the probability away from the market price. */
+    contradictionScore: number;
+    confidence: 'High' | 'Medium' | 'Low';
+    tier: 1 | 2 | 3;
+    timeAdvantageHours: number;
+    /** Model's own probability (%) that outcomes[0] (YES) resolves true. */
+    aiProbability: number;
+    /** Which side the evidence favours. */
+    direction: 'YES' | 'NO' | 'NONE';
+    /** Does the evidence actually concern this market? Guards against keyword false positives. */
+    relevant: boolean;
+    reasoning: string;
+    model: string;
+}
 
 export async function analyzeContradiction(
     market: PolymarketMarket,
-    evidence: { title: string, source: string, date: string, snippet?: string },
+    evidence: { title: string; source: string; date: string; url?: string; snippet?: string },
     financialContext?: StandardizedContext
 ): Promise<AnalysisResult | null> {
-    try {
-        const API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-        if (!API_KEY) throw new Error("Missing Google API Key");
+    let contextString = '';
+    if (financialContext) {
+        if (financialContext.fundamentals?.length) contextString += '\nFUNDAMENTALS:\n' + financialContext.fundamentals.map(f => `- ${f.symbol}: price $${f.latestPrice}, P/E ${f.keyStats.peRatio}`).join('\n');
+        if (financialContext.economics?.length) contextString += '\nMACRO DATA:\n' + financialContext.economics.map(e => `- ${e.title}: ${e.latestValue} (${e.date})`).join('\n');
+        if (financialContext.forex?.length) contextString += '\nFOREX:\n' + financialContext.forex.map(f => `- ${f.from}/${f.to}: ${f.rate} (${f.date})`).join('\n');
+        if (financialContext.newsSentiment?.length) contextString += '\nSENTIMENT:\n' + financialContext.newsSentiment.join('\n');
+    }
 
-        const genAI = new GoogleGenerativeAI(API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const yesPct = Math.round(market.yesPrice * 100);
+    const prompt = `
+You are a prediction-market analyst. Decide whether a piece of evidence changes the probability of a Polymarket market.
 
-        // Formatting Context for Prompt
-        let contextString = "";
-        if (financialContext) {
-            if (financialContext.fundamentals?.length) {
-                contextString += "\nFUNDAMENTALS:\n" + financialContext.fundamentals.map(f => `- ${f.symbol}: Price $${f.latestPrice}, P / E ${f.keyStats.peRatio} `).join("\n");
-            }
-            if (financialContext.economics?.length) {
-                contextString += "\nMACRO DATA:\n" + financialContext.economics.map(e => `- ${e.title}: ${e.latestValue} (${e.date})`).join("\n");
-            }
-            if (financialContext.newsSentiment?.length) {
-                contextString += "\nSENTIMENT:\n" + financialContext.newsSentiment.join("\n");
-            }
-        }
-
-        const prompt = `
-        ACT AS: A Senior Financial Analyst & Contrarian Signal Detector.
-
-    TASK: Analyze if the provided "Recent News/Evidence" contradicts the "Prediction Market Question".
-
-        MARKET: "${market.question}"
+MARKET QUESTION: "${market.question}"
+MARKET DESCRIPTION / RESOLUTION RULES: "${market.description.slice(0, 1200)}"
+OUTCOMES: ${JSON.stringify(market.outcomes)}
+CURRENT MARKET PRICE: ${yesPct}% for "${market.outcomes[0] || 'Yes'}"
+MARKET CLOSES: ${market.endDate}
+TODAY: ${new Date().toISOString().slice(0, 10)}
 
 EVIDENCE:
-Title: "${evidence.title}"
-Source: "${evidence.source}"
-Date: "${evidence.date}"
-        
-        ADDITIONAL CONTEXT(Real - time Data):
-        ${contextString || "No specific financial data fetched."}
-        
-        ** Your Task:**
-    Analyze if this news article contradicts the current market assumption.
-        
-        ** Scoring Framework:**
-    1. ** Freshness(0 - 30):** Is this breaking news ?
-        2. ** Source Quality(0 - 25):** Tier 1 outlet or official govt source ?
-            3. ** Evidence Clarity(0 - 25):** Direct quote > Paraphrase > Speculation.
-        4. ** Language Advantage(0 - 20):** Is this hard to find in English ?
-        
-        ** Signal Tiers:**
-        - ** Tier 1(80 + pts):** High Confidence Contradiction(Trade Signal)
-    - ** Tier 2(60 - 79 pts):** Moderate Divergence(Watchlist)
-        - ** Tier 3(<60 pts):** Information Context(Noise)
+- Title: "${evidence.title}"
+- Source: ${evidence.source}
+- Published: ${evidence.date}
+${evidence.snippet ? `- Excerpt: ${evidence.snippet}` : ''}
+${contextString ? `\nADDITIONAL DATA:${contextString}` : ''}
 
-        Return ONLY a JSON object:
+Rules:
+1. First decide if the evidence is genuinely about THIS market (same entity, same event, same timeframe). Keyword overlap alone is NOT relevance. If not relevant, set relevant=false, direction="NONE", contradictionScore=0.
+2. If relevant, estimate your own probability (aiProbability, 1-99) that "${market.outcomes[0] || 'Yes'}" resolves true, given the evidence and the resolution rules.
+3. contradictionScore = how far and how confidently your estimate diverges from the market's ${yesPct}%: 0 = agrees, 100 = strong, well-sourced disagreement.
+4. tier: 1 if contradictionScore >= 80, 2 if 60-79, else 3.
+5. Be conservative. Prefer "NONE" over a weak call.
+
+Return ONLY this JSON object:
 {
-    "keyFinding": "One powerful sentence summary",
-        "evidenceType": "official_document" | "direct_quote" | "expert_analysis" | "rumor",
-            "contradictionScore": number(0 - 100),
-                "confidence": "High" | "Medium" | "Low",
-                    "tier": 1 | 2 | 3,
-                        "timeAdvantageHours": number(estimated),
-                            "reasoning": "Brief explanation of the score"
-}
-`;
+  "relevant": true | false,
+  "keyFinding": "one sentence",
+  "evidenceType": "official_document" | "direct_quote" | "expert_analysis" | "rumor",
+  "aiProbability": number,
+  "direction": "YES" | "NO" | "NONE",
+  "contradictionScore": number,
+  "confidence": "High" | "Medium" | "Low",
+  "tier": 1 | 2 | 3,
+  "timeAdvantageHours": number,
+  "reasoning": "brief"
+}`;
 
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.text();
-
-        // Robust JSON extraction
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error('No JSON found in response');
-        }
-
-        try {
-            return JSON.parse(jsonMatch[0]);
-        } catch (e) {
-            // Last resort: simple cleanup
-            const simpleClean = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(simpleClean);
-        }
+    try {
+        const { data, model } = await askJson<Partial<AnalysisResult>>(prompt);
+        const score = Math.max(0, Math.min(100, Number(data.contradictionScore) || 0));
+        const aiProb = Math.max(1, Math.min(99, Number(data.aiProbability) || yesPct));
+        return {
+            relevant: data.relevant !== false,
+            keyFinding: String(data.keyFinding || ''),
+            evidenceType: (['official_document', 'direct_quote', 'expert_analysis', 'rumor'] as const).includes(data.evidenceType as never) ? data.evidenceType as AnalysisResult['evidenceType'] : 'expert_analysis',
+            aiProbability: aiProb,
+            direction: data.direction === 'YES' || data.direction === 'NO' ? data.direction : 'NONE',
+            contradictionScore: score,
+            confidence: data.confidence === 'High' || data.confidence === 'Medium' ? data.confidence : 'Low',
+            tier: score >= 80 ? 1 : score >= 60 ? 2 : 3,
+            timeAdvantageHours: Math.max(0, Number(data.timeAdvantageHours) || 0),
+            reasoning: String(data.reasoning || ''),
+            model
+        };
     } catch (error) {
-        console.error('AI Analysis failed:', error);
+        console.error('AI analysis failed:', (error as Error).message);
         return null;
     }
 }

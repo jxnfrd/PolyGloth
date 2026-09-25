@@ -1,208 +1,129 @@
-import { fetchActiveMarkets } from './polymarket';
-import { detectSignalSpikes, GdeltAdvancedArticle } from './gdelt-advanced';
+import { createClient } from '@supabase/supabase-js';
+import { fetchActiveMarkets, PolymarketMarket } from './polymarket';
+import { detectSignalSpikes, fetchStandardNews, GdeltAdvancedArticle, GdeltRateLimitError } from './gdelt-advanced';
 import { analyzeContradiction } from './analyst';
 import { calculateFreshnessScore } from './freshness';
-import { createClient } from '@/utils/supabase/server';
+import { SourceRouter } from './source-router';
 
 export interface ScanResult {
     marketsScanned: number;
     signalsFound: number;
+    rejected: number;
+    errors: number;
 }
 
-// Update signature to accept optional limit
-export async function runScan(limit?: number): Promise<ScanResult> {
-    console.log('Starting intelligence scan (V2: Multi-Source)...');
-    let signalsFound = 0;
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+const STOP = new Set(['will', 'the', 'be', 'on', 'in', 'of', 'to', 'a', 'an', 'is', 'for', 'by', 'this', 'week', 'year', 'month', 'day', 'before', 'after', 'than', 'more', 'less', 'and', 'or', 'at', 'from', 'with', 'win', 'reach', 'hit', 'over', 'under', 'any', 'does', 'do', 'have', 'has', 'end', 'top']);
 
-    // Helper to log process
-    const log = async (level: 'info' | 'warning' | 'error', msg: string, meta?: any) => {
-        console.log(`[${level.toUpperCase()}] ${msg}`);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await supabase.from('processing_logs').insert({
-            log_level: level,
-            component: 'Orchestrator V2',
-            message: msg,
-            metadata: meta
-        } as any);
+/**
+ * Keywords for a GDELT query: proper nouns and numbers first, then other content words.
+ * Max 3 terms, AND-ed by the GDELT client. Fewer, more specific terms beat OR-lists of
+ * generic words (the old OR-list matched "Boston College Eagles" to .gov documents).
+ */
+export function extractKeywords(question: string): string[] {
+    const tokens = question.replace(/[^\w\s$%.-]/g, ' ').split(/\s+/).filter(Boolean);
+    const MONTHS = /^(january|february|march|april|may|june|july|august|september|october|november|december)$/i;
+    const proper = tokens.filter(t => /^[A-Z][a-zA-Z.]{2,}$/.test(t) && !STOP.has(t.toLowerCase()) && !MONTHS.test(t));
+    const numbers = tokens.filter(t => /^\$?\d[\d,.]*[kKmMbB%]?$/.test(t) && !/^(19|20)\d\d$/.test(t));
+    const rest = tokens.filter(t => !proper.includes(t) && !numbers.includes(t) && t.length > 3 && !STOP.has(t.toLowerCase()) && !MONTHS.test(t) && !/^\d+$/.test(t));
+    const uniq = (arr: string[]) => Array.from(new Set(arr));
+    // proper nouns first, then content words, numbers last (a bare "25" or "2027" matches everything)
+    return uniq([...proper, ...rest, ...numbers]).slice(0, 3);
+}
+
+export async function runScan(limit = 30, opts: { minVolume?: number } = {}): Promise<ScanResult> {
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const result: ScanResult = { marketsScanned: 0, signalsFound: 0, rejected: 0, errors: 0 };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const log = async (level: 'info' | 'warning' | 'error', message: string, metadata?: any) => {
+        console.log(`[${level.toUpperCase()}] ${message}`);
+        await supabase.from('processing_logs').insert({ log_level: level, component: 'Orchestrator V3', message, metadata });
     };
 
-    await log('info', 'Starting new scan cycle');
+    await log('info', 'Starting scan cycle');
 
-    // 1. Fetch active markets
-    // Increase limit for better testing of filtering
-    const initialLimit = 30; // Define the initial limit for fetching
-    let markets = await fetchActiveMarkets(initialLimit); // Use 'let' because 'markets' will be reassigned
-    await log('info', `[MARKET_DISCOVERY] Fetched ${markets.length} active markets`);
+    // 1. Markets: real volume ordering, no sports, no near-certain prices.
+    const markets = await fetchActiveMarkets(limit, { minVolume: opts.minVolume ?? 50_000, excludeSports: true });
+    result.marketsScanned = markets.length;
+    await log('info', `[MARKET_DISCOVERY] ${markets.length} candidate markets`);
 
-    // Vercel Optimization:
-    // If scanning a small batch, randomize the order so we don't always check the same top markets.
-    if (initialLimit < 10) { // Use initialLimit here
-        markets.sort(() => Math.random() - 0.5);
-    }
-
-    // Take the slice AFTER shuffling (or before if we wanted top-liquidity only, but coverage is better)
-    markets = markets.slice(0, initialLimit); // Slice to the actual limit
-
-    console.log(`[INFO] Processing batch of ${markets.length} markets...`);
-    await log('info', `[MARKET_DISCOVERY] Starting scan cycle for ${markets.length} markets (Batch Mode)`);
+    const router = new SourceRouter();
 
     for (const market of markets) {
         try {
-            const stopWords = new Set(['will', 'the', 'be', 'on', 'in', 'of', 'to', 'a', 'an', 'is', 'for', 'by', 'this', 'week', 'year', 'month', 'day']);
-            const cleanQuestion = market.question
-                .replace(/[^\w\s]/g, '')
-                .split(' ')
-                .filter(w => !stopWords.has(w.toLowerCase()) && w.length > 2)
-                .slice(0, 4);
-            const keywords = cleanQuestion;
+            const keywords = extractKeywords(market.question);
+            if (keywords.length < 2) { await log('info', `Skip (no usable keywords): ${market.question}`); continue; }
 
-            // --- V2 INTELLIGENCE: MULTI-SOURCE DETECTION ---
-
-            // 1. GDELT Advanced (Tone & Gov Docs)
-            // Check US tone first (default)
-            const spikes = await detectSignalSpikes(market.question, keywords, 'us'); // Default to US for now, could infer country from market
-
-            let strongestEvidence: GdeltAdvancedArticle | null = null;
-            let signalSource = 'NEWS_MEDIA';
-
-            // Priority 1: Government Official Docs (Highest Authority)
-            if (spikes.gov.length > 0) {
-                strongestEvidence = spikes.gov[0];
-                signalSource = 'OFFICIAL_GOV';
-                await log('info', `Found GOV DOC for: ${market.question}`, { url: strongestEvidence.url });
-            }
-            // Priority 2: Negative Tone Spike (Crisis/Panic)
-            else if (spikes.negative.length > 0) {
-                strongestEvidence = spikes.negative[0];
-                signalSource = 'NEWS_MEDIA'; // But distinct Tone Signal
-                await log('info', `Found NEGATIVE SPIKE (Tone ${strongestEvidence.tone}) for: ${market.question}`);
-            }
-            // Priority 3: Standard News Fallback (Tier 3)
-            else {
-                // If strict filters failed, try standard news
-                const { fetchStandardNews } = await import('./gdelt-advanced');
-                const standardNews = await fetchStandardNews(keywords);
-
-                if (standardNews.length > 0) {
-                    strongestEvidence = standardNews[0];
-                    signalSource = 'STANDARD_NEWS';
-                    await log('info', `Found STANDARD NEWS for: ${market.question}`);
-                }
+            // 2. Evidence (GDELT, serialized inside the client)
+            let evidence: GdeltAdvancedArticle | null = null;
+            let signalSource: 'OFFICIAL_GOV' | 'NEGATIVE_TONE' | 'STANDARD_NEWS' = 'STANDARD_NEWS';
+            try {
+                const spikes = await detectSignalSpikes(market.question, keywords, 'us');
+                if (spikes.gov.length) { evidence = spikes.gov[0]; signalSource = 'OFFICIAL_GOV'; }
+                else if (spikes.negative.length) { evidence = spikes.negative[0]; signalSource = 'NEGATIVE_TONE'; }
+                else { const std = await fetchStandardNews(keywords); if (std.length) { evidence = std[0]; signalSource = 'STANDARD_NEWS'; } }
+            } catch (e) {
+                if (e instanceof GdeltRateLimitError) { await log('error', 'GDELT rate limit hit, aborting cycle'); result.errors++; break; }
+                throw e;
             }
 
-            if (!strongestEvidence) {
-                // No advanced signal found
-                // Enable this log to see "what was checked" even if no signal found
-                await log('info', `Checked: ${market.question.substring(0, 50)}... (No signal found in Gov/Crisis/Standard)`);
-                continue;
-            }
+            if (!evidence) { await log('info', `No evidence: ${market.question.slice(0, 60)} [${keywords.join(', ')}]`); continue; }
 
-            // 2. AI Analysis (Deep Check)
-            // Verify if the signal actually relates to the market
-            const article = strongestEvidence;
-            const newsDate = new Date(article.date);
-            const hoursOld = (new Date().getTime() - newsDate.getTime()) / (1000 * 60 * 60);
+            const newsDate = new Date(evidence.date);
+            const hoursOld = (Date.now() - newsDate.getTime()) / 3_600_000;
+            if (!Number.isFinite(hoursOld) || hoursOld > 48) continue;
 
-            if (hoursOld > 48) { // Allow slightly older for docs
-                continue;
-            }
-
-            // Rate Limit Protection: Wait 4 seconds to stay under 15 RPM (Free Tier)
-            await new Promise(resolve => setTimeout(resolve, 4000));
-
-            // --- PHASE 3: FETCH FINANCIAL DATA ---
-            const { SourceRouter } = await import('./source-router');
-            const router = new SourceRouter();
-            await log('info', `[CONTEXT_COLLECTION] For market '${market.question.substring(0, 20)}...': Querying configured APIs...`);
+            // 3. Context + AI
             const financialContext = await router.routeAndFetch(market.question, keywords);
+            const analysis = await analyzeContradiction(market, { title: evidence.title, source: evidence.domain, date: evidence.date, url: evidence.url }, financialContext);
+            if (!analysis) { await log('warning', `AI analysis failed: ${market.question.slice(0, 60)}`); result.errors++; continue; }
 
-            await log('info', `[CONTEXT_COLLECTION] Result: ${financialContext.fundamentals?.length || 0} stocks, ${financialContext.economics?.length || 0} macro indicators`);
+            // 4. Decision. ACTIVE only when the evidence is relevant, takes a side, and the edge is real.
+            const edgePct = Math.abs(analysis.aiProbability - market.yesPrice * 100);
+            const status = analysis.relevant && analysis.direction !== 'NONE' && analysis.contradictionScore >= 60 && edgePct >= 10 ? 'ACTIVE' : 'REJECTED';
 
-            const analysis = await analyzeContradiction(market, {
-                title: article.title,
-                source: article.source || article.domain,
-                date: article.date
-            }, financialContext);
-
-            if (!analysis) {
-                await log('warning', `AI Analysis failed for: ${market.question}`);
-                continue;
-            }
-
-            // 3. Signal Generation
-            // Decide Status based on thresholds
-            let status = 'REJECTED';
-            if (analysis.contradictionScore > 50 || signalSource === 'OFFICIAL_GOV' || signalSource === 'STANDARD_NEWS') {
-                status = 'ACTIVE';
-            }
-
-            // Calculate Freshness
-            const liquidity = Number(market.volume) || 0;
-            const freshness = calculateFreshnessScore(newsDate, liquidity, analysis.contradictionScore, analysis.confidence);
-            const evidenceType = signalSource === 'OFFICIAL_GOV' ? 'OFFICIAL_DOCUMENT' : analysis.evidenceType;
-
-            const logMsg = status === 'ACTIVE'
-                ? `[SIGNAL_GENERATION] Signal Found! [${signalSource}] ${freshness.label}`
-                : `[SIGNAL_GENERATION] Signal Rejected (Low Score: ${analysis.contradictionScore})`;
-
-            await log(status === 'ACTIVE' ? 'info' : 'warning', logMsg, {
-                market: market.question,
-                score: analysis.contradictionScore,
-                status: status
-            });
-
+            const freshness = calculateFreshnessScore(newsDate, market.liquidity, analysis.contradictionScore, analysis.confidence);
             const payload = {
                 market_id: market.id,
-                market_slug: market.slug || `market-${market.id}`,
+                market_slug: market.slug,
                 market_title: market.question,
-                market_liquidity: isNaN(liquidity) ? 0 : liquidity,
-
-                article_url: article.url || 'https://google.com',
-                article_language: 'en',
-                source_outlet: article.domain || 'Unknown',
+                market_liquidity: market.liquidity,
+                market_yes_price: market.yesPrice,
+                condition_id: market.conditionId,
+                market_end_date: market.endDate || null,
+                article_url: evidence.url,
+                article_language: evidence.language || 'en',
+                source_outlet: evidence.domain,
                 news_published_at: newsDate.toISOString(),
-
-                source_credibility: (signalSource === 'OFFICIAL_GOV' ? 'high' : 'medium') as 'high' | 'medium' | 'low',
-
-                key_finding: analysis.keyFinding || "No finding",
-                evidence_type: evidenceType || "NEWS_MEDIA",
-                contradiction_score: analysis.contradictionScore || 0,
-                confidence: analysis.confidence || "Low",
-                tier: analysis.tier || 3,
-                time_advantage_hours: analysis.timeAdvantageHours || 0,
-
+                source_credibility: signalSource === 'OFFICIAL_GOV' ? 'high' : 'medium',
+                key_finding: analysis.keyFinding || 'No finding',
+                evidence_type: signalSource === 'OFFICIAL_GOV' ? 'OFFICIAL_DOCUMENT' : analysis.evidenceType.toUpperCase(),
+                contradiction_score: analysis.contradictionScore,
+                confidence: analysis.confidence,
+                tier: analysis.tier,
+                time_advantage_hours: analysis.timeAdvantageHours,
+                ai_probability: analysis.aiProbability,
+                direction: analysis.direction,
+                ai_model: analysis.model,
                 freshness_score: freshness.score,
                 indicator_color: freshness.color,
-                processing_log: [`Generated via Orchestrator V2 (Source: ${signalSource}) at ${new Date().toISOString()}`],
-
-                status: status // [NEW] Save status
+                processing_log: [`Orchestrator V3 ${new Date().toISOString()} source=${signalSource} keywords=${keywords.join('|')} relevant=${analysis.relevant} edge=${edgePct.toFixed(1)}pp`],
+                status
             };
 
-            // Insert into DB (Both ACTIVE and REJECTED)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { error: insertError } = await supabase.from('contrarian_signals').insert(payload as any);
-
-            if (insertError) {
-                await log('error', `DB Insert Failed for ${market.question}`, { error: insertError, payload });
-                console.error('CRITICAL DB ERROR:', insertError, payload);
-            } else {
-                if (status === 'ACTIVE') signalsFound++;
-            }
-
+            const { error } = await supabase.from('contrarian_signals').insert(payload);
+            if (error) { await log('error', `DB insert failed: ${market.question.slice(0, 60)}`, { error: error.message }); result.errors++; continue; }
+            if (status === 'ACTIVE') result.signalsFound++; else result.rejected++;
+            await log(status === 'ACTIVE' ? 'info' : 'warning', `[${status}] ${market.question.slice(0, 60)} | market ${Math.round(market.yesPrice * 100)}% vs AI ${analysis.aiProbability}% ${analysis.direction} | score ${analysis.contradictionScore}`);
         } catch (error) {
-            await log('error', `Error processing market ${market.id}`, error);
+            result.errors++;
+            await log('error', `Error processing market ${market.id}: ${(error as Error).message}`);
         }
     }
 
-    // Save Stats
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await supabase.from('matching_stats').insert({
-        total_markets: markets.length,
-        markets_with_news: 0,
-        signals_generated: signalsFound
-    } as any);
-
-    return { marketsScanned: markets.length, signalsFound };
+    await supabase.from('matching_stats').insert({ total_markets: result.marketsScanned, markets_with_news: result.signalsFound + result.rejected, signals_generated: result.signalsFound });
+    await log('info', `Scan done: ${JSON.stringify(result)}`);
+    return result;
 }
+
+export type { PolymarketMarket };

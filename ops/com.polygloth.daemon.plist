@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PolyGloth scheduler as a macOS launchd user agent.
+
+  1. Replace every __PLACEHOLDER__ below (repo path, node/npx path from `which npx`, log dir).
+  2. Copy:    cp ops/com.polygloth.daemon.plist ~/Library/LaunchAgents/
+  3. Load:    launchctl load -w ~/Library/LaunchAgents/com.polygloth.daemon.plist
+     Status:  launchctl list | grep polygloth
+     Logs:    tail -f __LOG_DIR__/polygloth-daemon.log
+     Stop:    launchctl unload -w ~/Library/LaunchAgents/com.polygloth.daemon.plist   (sends SIGTERM; the daemon finishes its current job)
+  The daemon is one process running jobs one at a time (SQLite single writer). Never run scripts/pm-run-all.sh
+  or scripts/pm-ingest.ts by hand while it is loaded; use `npx tsx scripts/pm-daemon.ts --once <job>` after unloading.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.polygloth.daemon</string>
+  <key>WorkingDirectory</key>
+  <string>__REPO_PATH__</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NPX_PATH__</string>
+    <string>tsx</string>
+    <string>scripts/pm-daemon.ts</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/polygloth-daemon.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/polygloth-daemon.err.log</string>
+</dict>
+</plist>

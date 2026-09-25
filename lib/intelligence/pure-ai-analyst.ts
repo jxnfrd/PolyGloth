@@ -1,149 +1,65 @@
-import OpenAI from 'openai';
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { PolymarketMarket } from "./polymarket";
+import { PolymarketMarket } from './polymarket';
+import { askJson } from './llm';
 
+/**
+ * "Pure AI" estimate: the model's probability for a market from the question,
+ * resolution rules and the current price alone. Stored next to the market price so
+ * the estimate can be scored against resolution later (see scripts/backtest-pure-ai.ts).
+ */
 export interface PureAIPrediction {
     market_id: string;
-    market_slug?: string;
+    market_slug: string;
+    market_question: string;
+    market_yes_price: number;
     summary: string;
     reasoning: string;
     estimatedProbability: number;
-    confidence_level: "high" | "medium" | "low";
+    confidence_level: 'high' | 'medium' | 'low';
     ai_model_used: string;
 }
 
-// --- PROMPT GENERATOR ---
-function generatePrompt(market: PolymarketMarket): string {
+function buildPrompt(market: PolymarketMarket): string {
+    const yesPct = Math.round(market.yesPrice * 100);
     return `
-  You are a prediction market analyst. Analyze the following betting market and provide your estimation.
+You are a calibrated forecaster. Estimate the probability that this prediction market resolves to "${market.outcomes[0] || 'Yes'}".
 
-  MARKET QUESTION: "${market.question}"
-  DESCRIPTION: "${market.description}"
-  LIQUIDITY: ${market.liquidity} USD
-  END DATE: ${market.endDate}
+MARKET QUESTION: "${market.question}"
+RESOLUTION RULES: "${market.description.slice(0, 1500)}"
+OUTCOMES: ${JSON.stringify(market.outcomes)}
+CURRENT MARKET PRICE: ${yesPct}% (this is the crowd's estimate; only deviate with a concrete reason)
+CLOSES: ${market.endDate}
+TODAY: ${new Date().toISOString().slice(0, 10)}
 
-  Provide your analysis in the following STRICT JSON format:
-  {
-    "summary": "A 1-2 sentence prediction of the most likely outcome.",
-    "reasoning": "A step-by-step explanation of your thinking, considering the context, plausible scenarios, and common sense.",
-    "estimatedProbability": A number between 1 and 99 representing the percentage chance the "Yes" outcome occurs.,
-    "confidence": "high", "medium", or "low" based on the clarity of the question and available information.
-  }
-  `;
+Return ONLY this JSON object:
+{
+  "summary": "1-2 sentence forecast",
+  "reasoning": "step-by-step: base rate, what would have to happen, key uncertainties",
+  "estimatedProbability": number between 1 and 99,
+  "confidence": "high" | "medium" | "low"
+}`;
 }
 
-// --- PROVIDER 1: OPENAI ---
-async function tryOpenAI(prompt: string): Promise<{ data: any, model: string } | null> {
-    const API_KEY = process.env.OPENAI_API_KEY;
-    if (!API_KEY) return null;
-
-    try {
-        const openai = new OpenAI({ apiKey: API_KEY });
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-                { role: "system", content: "You are a helpful assistant that outputs strictly JSON." },
-                { role: "user", content: prompt }
-            ],
-            response_format: { type: "json_object" }
-        });
-        const content = response.choices[0].message.content;
-        return content ? { data: JSON.parse(content), model: 'gpt-4o' } : null;
-    } catch (e) {
-        console.error("OpenAI Failed:", e);
-        return null;
-    }
-}
-
-// --- PROVIDER 2: GEMINI ---
-async function tryGemini(prompt: string): Promise<{ data: any, model: string } | null> {
-    const API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    if (!API_KEY) return null;
-
-    try {
-        const genAI = new GoogleGenerativeAI(API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return { data: JSON.parse(cleanJson), model: 'gemini-1.5-flash' };
-    } catch (e) {
-        console.error("Gemini Failed:", e);
-        return null;
-    }
-}
-
-// --- PROVIDER 3: OPENROUTER ---
-async function tryOpenRouter(prompt: string): Promise<{ data: any, model: string } | null> {
-    const API_KEY = process.env.OPENROUTER_API_KEY;
-    if (!API_KEY) {
-        console.log("No OpenRouter Key found.");
-        return null;
-    }
-
-    try {
-        const openai = new OpenAI({
-            apiKey: API_KEY,
-            baseURL: "https://openrouter.ai/api/v1"
-        });
-
-        // Using Gemini 2.0 Flash Exp via OpenRouter (User Requested / Reliable Free Tier)
-        const response = await openai.chat.completions.create({
-            model: "google/gemini-2.0-flash-exp:free",
-            messages: [
-                { role: "system", content: "You are a helpful assistant that outputs strictly JSON." },
-                { role: "user", content: prompt }
-            ]
-        });
-
-        const content = response.choices[0].message.content;
-        if (!content) return null;
-
-        const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-        return { data: JSON.parse(cleanContent), model: 'openrouter/gemini-2.0-flash' };
-    } catch (e: any) {
-        console.log(`OpenRouter Failed: ${e.message}`);
-        if (e.response) console.log(JSON.stringify(e.response.data));
-        return null;
-    }
-}
-
-// --- MAIN ORCHESTRATOR ---
 export async function generatePureAIPrediction(market: PolymarketMarket): Promise<PureAIPrediction | null> {
-    const prompt = generatePrompt(market);
-
-    let result = await tryOpenAI(prompt);
-
-    if (!result) {
-        console.log("⚠️ OpenAI failed. Falling back to Gemini...");
-        result = await tryGemini(prompt);
-    }
-
-    if (!result) {
-        console.log("⚠️ Gemini failed. Falling back to OpenRouter...");
-        result = await tryOpenRouter(prompt);
-    }
-
-    if (!result) {
-        console.error("❌ ALL AI Providers failed.");
+    try {
+        const { data, model } = await askJson<{ summary?: string; reasoning?: string; estimatedProbability?: number; confidence?: string }>(buildPrompt(market));
+        const p = Number(data.estimatedProbability);
+        if (!data.summary || !data.reasoning || !Number.isFinite(p)) {
+            console.error(`Invalid JSON from ${model}:`, JSON.stringify(data).slice(0, 200));
+            return null;
+        }
+        return {
+            market_id: market.id,
+            market_slug: market.slug,
+            market_question: market.question,
+            market_yes_price: market.yesPrice,
+            summary: data.summary,
+            reasoning: data.reasoning,
+            estimatedProbability: Math.max(1, Math.min(99, Math.round(p))),
+            confidence_level: data.confidence === 'high' || data.confidence === 'low' ? data.confidence : 'medium',
+            ai_model_used: model
+        };
+    } catch (e) {
+        console.error('Pure AI prediction failed:', (e as Error).message);
         return null;
     }
-
-    const { data: prediction, model } = result;
-
-    // Validate
-    if (!prediction.summary || !prediction.reasoning || typeof prediction.estimatedProbability !== 'number') {
-        console.error(`Invalid JSON from ${model}`);
-        return null;
-    }
-
-    return {
-        market_id: market.id,
-        market_slug: market.slug || undefined,
-        summary: prediction.summary,
-        reasoning: prediction.reasoning,
-        estimatedProbability: prediction.estimatedProbability,
-        confidence_level: prediction.confidence || "medium",
-        ai_model_used: model
-    };
 }
